@@ -26,10 +26,9 @@ POST_TOPICS = [
 def generate_ai_content_and_caption(topic):
     """Génère le texte (légende) et utilise une URL d'image statique et carrée (1:1) pour la validation."""
     
-    # 1. URL d'image (Image de test statique acceptée par Meta)
-    # C'est une image carrée (1:1) de 1080x1080, proportion requise par Instagram.
-    # IMPORTANT : Remplacez cette URL par l'URL de votre propre image de production une fois le test réussi !
-    image_url = "https://images.unsplash.com/photo-1541416733221-f112e4f50935?w=1080&h=1080&fit=crop&q=80" 
+    # URL de test statique et propre (Image d'un ordinateur, format 1:1)
+    # Cette URL se termine correctement par .jpeg et respecte le format Instagram.
+    image_url = "https://cdn.pixabay.com/photo/2016/06/15/22/04/computer-1459146_960_720.jpeg" 
     
     # 2. Générer la légende (texte)
     try:
