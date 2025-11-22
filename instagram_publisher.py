@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import random # Importé pour choisir un sujet aléatoire, si désiré
 from google import genai
 from google.genai.errors import APIError
 
@@ -23,11 +24,12 @@ POST_TOPICS = [
 ]
 
 def generate_ai_content_and_caption(topic):
-    """Génère le texte (légende) et utilise une URL d'image pour le test."""
+    """Génère le texte (légende) et utilise une URL d'image statique pour la validation."""
     
-    # 1. URL d'image (Placeholder pour le test)
-    # Dans une version de production, vous utiliseriez ici une API de génération d'image
-    image_url = "https://picsum.photos/1080/1080" # Image carrée 1:1, idéale pour Instagram
+    # 1. URL d'image (Image de test statique acceptée par Meta)
+    # Remplacement de l'URL dynamique par une image statique, publique et vérifiée (.png)
+    # IMPORTANT : Remplacez cette URL par votre propre image carrée de production !
+    image_url = "https://www.gstatic.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png" 
     
     # 2. Générer la légende (texte)
     try:
@@ -134,12 +136,14 @@ if __name__ == "__main__":
     if not insta_business_id:
         exit(1)
 
-    topic = POST_TOPICS[0]
+    # Choisit un sujet aléatoire pour la production, utilise le premier pour le test
+    topic = POST_TOPICS[0] 
     print(f"\n--- Génération et publication du Post Instagram : {topic} ---")
     
     # 2. Générer l'image et la légende
     image_url, caption = generate_ai_content_and_caption(topic)
     print(f"Légende générée (début) : {caption[:50]}...")
+    print(f"URL de l'image utilisée : {image_url}")
     
     # 3. Publier sur Instagram
     publish_instagram_media(insta_business_id, image_url, caption)
