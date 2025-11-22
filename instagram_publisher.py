@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import random # Importé pour choisir un sujet aléatoire, si désiré
+import random 
 from google import genai
 from google.genai.errors import APIError
 
@@ -24,12 +24,12 @@ POST_TOPICS = [
 ]
 
 def generate_ai_content_and_caption(topic):
-    """Génère le texte (légende) et utilise une URL d'image statique pour la validation."""
+    """Génère le texte (légende) et utilise une URL d'image statique et carrée (1:1) pour la validation."""
     
     # 1. URL d'image (Image de test statique acceptée par Meta)
-    # Remplacement de l'URL dynamique par une image statique, publique et vérifiée (.png)
-    # IMPORTANT : Remplacez cette URL par votre propre image carrée de production !
-    image_url = "https://www.gstatic.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png" 
+    # C'est une image carrée (1:1) de 1080x1080, proportion requise par Instagram.
+    # IMPORTANT : Remplacez cette URL par l'URL de votre propre image de production une fois le test réussi !
+    image_url = "https://images.unsplash.com/photo-1541416733221-f112e4f50935?w=1080&h=1080&fit=crop&q=80" 
     
     # 2. Générer la légende (texte)
     try:
