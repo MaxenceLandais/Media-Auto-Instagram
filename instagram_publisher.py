@@ -29,7 +29,7 @@ def generate_ai_content_and_caption(topic):
     # 1. URL d'image (VOTRE image statique GitHub Pages)
     # L'image 20200717_215732.jpg doit être dans le dossier assets/
     # Assurez-vous que cette image est bien au format 1:1 (carré) ou 1.91:1 (paysage) pour Instagram.
-    image_url = "https://maxencelandais.github.io/Media-Auto-Instagram/assets/20200717_215732.jpg" 
+    image_url = "https://maxencelandais.github.io/Media-Auto-Instagram/assets/20200717_215732_insta.jpg" 
     
     # 2. Générer la légende (texte)
     try:
