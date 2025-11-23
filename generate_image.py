@@ -15,55 +15,67 @@ def generate_image_with_vertex_ai(
     model_name: str = "imagegeneration",
     output_dir: str = "generated_images",
     num_images: int = 1,
-    image_width: int = 512,  # Taille réduite pour éviter le 504
-    image_height: int = 512, # Taille réduite pour éviter le 504
+    image_width: int = 512,
+    image_height: int = 512,
     mime_type: str = "image/png"
 ):
     """
     Génère une ou plusieurs images en utilisant l'API Vertex AI via PredictionServiceClient.
     """
     try:
-        # Initialisation du client aiplatform pour la configuration globale (projet, région)
         aiplatform.init(project=project_id, location=location)
 
-        # Configuration du client de prédiction pour interagir avec le modèle spécifique
         client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
         client = PredictionServiceClient(client_options=client_options)
 
-        # Préparation des instances (le prompt)
         instances_json = [{"prompt": prompt}]
         
-        # Préparation des paramètres de génération (nombre d'images, taille, etc.)
         parameters_json = {
             "sample_count": num_images,
             "width": image_width,
             "height": image_height,
-            # "seed": 42 # Optionnel: pour la reproductibilité
         }
 
-        # Définition de l'endpoint du modèle de fondation (Publisher Model)
         endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}"
 
         print(f"Tentative de génération de {num_images} image(s) ({image_width}x{image_height}) avec le prompt: '{prompt}' via l'endpoint '{endpoint}'...")
 
-        # Appel à l'API de prédiction AVEC UN TIMEOUT PLUS LONG
         response = client.predict(
             endpoint=endpoint,
             instances=instances_json,
             parameters=parameters_json,
-            timeout=60.0 # <--- AJOUT DU TIMEOUT ICI (60 secondes)
+            timeout=60.0
         )
 
-        # Création du répertoire de sortie si nécessaire
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             print(f"Répertoire '{output_dir}' créé.")
 
-        # Traitement de la réponse et sauvegarde des images
+        # --- CHANGEMENT CLÉ ICI : ACCÈS À LA PRÉDICTION ---
         if response and response.predictions:
-            for i, prediction_value in enumerate(response.predictions):
-                # Chaque prédiction est un objet Value contenant un dictionnaire struct_value
-                prediction_dict = prediction_value.struct_value
+            for i, prediction_value_object in enumerate(response.predictions):
+                # Convertir l'objet Value ou MapComposite en dictionnaire Python
+                # Cela garantit que nous pouvons accéder aux clés comme un dict normal.
+                prediction_dict = {}
+                if hasattr(prediction_value_object, 'struct_value'): # Cas typique de Value
+                    prediction_dict = prediction_value_object.struct_value
+                elif hasattr(prediction_value_object, 'fields'): # Autre structure possible pour MapComposite
+                    # Il faut reconstruire le dict à partir des champs
+                    prediction_dict = {key: getattr(value, 'string_value', None) or \
+                                            getattr(value, 'number_value', None) or \
+                                            getattr(value, 'bool_value', None) or \
+                                            getattr(value, 'struct_value', None) or \
+                                            getattr(value, 'list_value', None) \
+                                            for key, value in prediction_value_object.fields.items()}
+                else: # Cas le plus simple si l'objet est déjà un dict-like ou directement le contenu
+                    # Tenter de convertir directement si ce n'est pas un proto object
+                    try:
+                        prediction_dict = dict(prediction_value_object) 
+                    except TypeError:
+                        print(f"Avertissement: Impossible de convertir l'objet de prédiction {i+1} en dictionnaire.")
+                        continue # Passer à la prédiction suivante
+                
+                # Maintenant, nous pouvons accéder à 'bytesBase64Encoded'
                 if "bytesBase64Encoded" in prediction_dict:
                     image_bytes = base64.b64decode(prediction_dict["bytesBase64Encoded"])
                     
@@ -74,21 +86,19 @@ def generate_image_with_vertex_ai(
                         f.write(image_bytes)
                     print(f"Image {i+1} générée et sauvegardée sous {filename}")
                 else:
-                    print(f"Avertissement: La prédiction {i+1} ne contient pas de données d'image valides.")
-                    if "error" in prediction_dict:
-                        print(f"Détails de l'erreur pour la prédiction {i+1}: {prediction_dict['error']}")
+                    print(f"Avertissement: La prédiction {i+1} ne contient pas de données d'image valides. Contenu: {prediction_dict}")
         else:
             print("Aucune prédiction d'image reçue de l'API Vertex AI.")
 
     except Exception as e:
         print(f"ERREUR: Une erreur est survenue lors de la génération d'images: {e}")
         print("\nPoints à vérifier impérativement:")
-        print("1. **Permissions:** Le compte de service ('media-upload-key') doit avoir les rôles nécessaires (Administrateur Vertex AI). (Confirmé)")
-        print("2. **Authentification:** La variable d'environnement GOOGLE_APPLICATION_CREDENTIALS doit être correctement définie et pointer vers la clé JSON. (Confirmé)")
-        print("3. **Nom du Modèle:** 'imagegeneration' est le nom correct pour le modèle de Google Publisher.")
-        print("4. **Région:** 'us-central1' doit être utilisée et le modèle doit y être disponible. (Confirmé)")
-        print("5. **Quotas:** Vérifiez les quotas pour l'API de génération d'images dans votre projet GCP. (Confirmé que le quota est bon)")
-        print("6. **Logs Vertex AI:** Consultez l'explorateur de journaux pour des messages d'erreur plus détaillés côté serveur.")
+        print("1. **Permissions:** Le compte de service a les rôles nécessaires (Administrateur Vertex AI). (Confirmé)")
+        print("2. **Authentification:** La variable GOOGLE_APPLICATION_CREDENTIALS est correctement définie. (Confirmé)")
+        print("3. **Nom du Modèle:** 'imagegeneration' est le nom correct.")
+        print("4. **Région:** 'us-central1' est utilisée. (Confirmé)")
+        print("5. **Quotas:** Le quota est bon. (Confirmé)")
+        print("6. **Logs Vertex AI:** Consultez l'explorateur de journaux pour plus de détails sur la réponse API.")
 
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
