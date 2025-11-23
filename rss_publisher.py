@@ -16,7 +16,7 @@ GCS_SERVICE_ACCOUNT_KEY = os.getenv("GCS_SERVICE_ACCOUNT_KEY")
 
 GRAPH_BASE_URL = "https://graph.facebook.com/v18.0"
 
-# Configuration RSS (Google News, ultra-stable)
+# Configuration RSS (Google News, ultra-stable avec User-Agent)
 RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr" 
 RSS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
@@ -33,6 +33,7 @@ def upload_to_gcs_and_get_url(image_data, file_name, content_type='image/jpeg'):
     print(f"\n--- Tentative de téléversement vers GCS: {file_name} ---")
     
     try:
+        # Authentification GCS via la clé de service JSON
         credentials = json.loads(GCS_SERVICE_ACCOUNT_KEY)
         client = storage.Client.from_service_account_info(credentials)
         bucket = client.bucket(GCS_BUCKET_NAME)
@@ -42,8 +43,13 @@ def upload_to_gcs_and_get_url(image_data, file_name, content_type='image/jpeg'):
 
     try:
         blob = bucket.blob(file_name)
+        
+        # Téléversement de l'image
         blob.upload_from_file(BytesIO(image_data), content_type=content_type)
-        blob.make_public() 
+        
+        # --- LIGNE CLÉ : LA COMMANDE make_public() EST SUPPRIMÉE ---
+        # Si vous avez déjà donné le rôle 'Lecteur des objets Storage' à 'allUsers' sur le bucket entier,
+        # l'image est PUBLIC par héritage. Meta peut y accéder.
         
         public_url = f"{GCS_BASE_URL}/{file_name}"
         print(f"✅ Téléversement GCS réussi. URL: {public_url}")
@@ -60,7 +66,6 @@ def get_latest_rss_article():
     print(f"\n--- Tentative de récupération RSS depuis : {RSS_FEED_URL} ---")
     
     try:
-        # Utilisation du User-Agent pour éviter le blocage par certains serveurs
         feed = feedparser.parse(RSS_FEED_URL, agent=RSS_USER_AGENT)
         
         if feed.status != 200 and feed.status != 301 and feed.status != 302:
@@ -86,6 +91,8 @@ def generate_and_fetch_image_data(topic):
     
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        # 1. Génération de la description d'image par l'IA
         prompt_image_description = (
             f"Génère une description détaillée et créative pour une image "
             f"représentant visuellement le sujet suivant : '{topic}'. "
@@ -98,7 +105,7 @@ def generate_and_fetch_image_data(topic):
         image_prompt = response_image_description.text.strip()
         print(f"✅ Description d'image IA générée: '{image_prompt}'")
         
-        # Utilisation de PICSUM comme placeholder fiable basé sur le hachage du sujet.
+        # 2. Téléchargement d'un placeholder (simulant l'image générée)
         placeholder_image_url = "https://picsum.photos/seed/" + str(hash(topic) % 1000) + "/1200/800"
         
         r = requests.get(placeholder_image_url, stream=True, headers={'User-Agent': RSS_USER_AGENT})
@@ -106,8 +113,9 @@ def generate_and_fetch_image_data(topic):
         
         content_type = r.headers.get('Content-Type')
         if content_type and 'image' in content_type:
+            file_extension = mimetypes.guess_extension(content_type, strict=True) or ".jpeg"
             print(f"✅ Image téléchargée (Type: {content_type}).")
-            return r.content, mimetypes.guess_extension(content_type, strict=True) or ".jpeg"
+            return r.content, file_extension
         else:
             print(f"❌ L'URL n'a pas renvoyé une image valide (Type: {content_type}).")
             return None, None
@@ -143,7 +151,6 @@ def generate_ai_caption(topic, article_link=None):
 
 def get_instagram_business_id():
     """Récupère l'ID du compte Instagram Business lié à la Page Facebook."""
-    # (code inchangé)
     url = f"{GRAPH_BASE_URL}/{PAGE_ID}?fields=instagram_business_account&access_token={ACCESS_TOKEN}"
     try:
         r = requests.get(url)
@@ -160,7 +167,6 @@ def get_instagram_business_id():
 
 def check_media_status(creation_id, access_token):
     """Vérifie l'état de traitement du conteneur."""
-    # (code inchangé)
     status_url = f"{GRAPH_BASE_URL}/{creation_id}?fields=status_code&access_token={access_token}"
     max_checks = 10 
     for i in range(max_checks):
@@ -180,12 +186,18 @@ def check_media_status(creation_id, access_token):
 def publish_instagram_image(insta_id, image_url, caption):
     """Effectue la publication d'image en deux étapes sur Instagram."""
     
-    # (code inchangé)
     print("\n--- Début de la publication d'image sur Instagram (Processus en 2 étapes) ---")
     
     # 1. CRÉER LE CONTENEUR MÉDIA
+    print("Étape 1/2: Création du conteneur média...")
     media_container_url = f"{GRAPH_BASE_URL}/{insta_id}/media"
-    container_payload = { "media_type": "IMAGE", "image_url": image_url, "caption": caption, "access_token": ACCESS_TOKEN }
+    
+    container_payload = {
+        "media_type": "IMAGE",           
+        "image_url": image_url,          
+        "caption": caption,
+        "access_token": ACCESS_TOKEN
+    }
     
     r1 = requests.post(media_container_url, data=container_payload)
     data1 = r1.json()
@@ -202,6 +214,7 @@ def publish_instagram_image(insta_id, image_url, caption):
         return False
     
     # 2. PUBLIER LE CONTENEUR MÉDIA
+    print("\nÉtape 2/2: Publication du conteneur...")
     publish_url = f"{GRAPH_BASE_URL}/{insta_id}/media_publish"
     publish_payload = { "creation_id": creation_id, "access_token": ACCESS_TOKEN }
     
@@ -229,7 +242,6 @@ if __name__ == "__main__":
     # 1. ACQUISITION DE L'ARTICLE RSS
     article = get_latest_rss_article()
     if not article:
-        print("❌ Abandon : Impossible de récupérer un article RSS.")
         exit(1)
 
     topic = article.title
@@ -244,7 +256,6 @@ if __name__ == "__main__":
     file_name = f"rss_image_{int(time.time())}{file_extension}"
         
     # 3. TÉLÉVERSEMENT VERS GCS
-    # On déduit le type de contenu du file_extension (ex: .jpeg -> image/jpeg)
     content_type = f'image/{file_extension.lstrip(".")}' 
     final_image_url = upload_to_gcs_and_get_url(image_data, file_name, content_type=content_type)
     if not final_image_url:
