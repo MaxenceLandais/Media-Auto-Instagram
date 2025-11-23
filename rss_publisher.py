@@ -15,7 +15,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GCS_SERVICE_ACCOUNT_KEY = os.getenv("GCS_SERVICE_ACCOUNT_KEY")
 
 GRAPH_BASE_URL = "https://graph.facebook.com/v18.0"
-RSS_FEED_URL = "https://rss.lefigaro.fr/rss/actu/figaro_actualites.xml" # Exemple de flux RSS (peut être modifié)
+# Nouvelle ligne (Flux de France Info, très stable)
+RSS_FEED_URL = "https://www.franceinfo.fr/rss/actu"
 
 # Configuration GCS
 GCS_BUCKET_NAME = "media-auto-instagram" # Votre bucket GCS
