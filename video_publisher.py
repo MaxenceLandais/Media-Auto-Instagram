@@ -25,8 +25,8 @@ POST_TOPICS = [
 def generate_ai_content_and_caption(topic):
     """Génère le texte (légende) et utilise une URL de vidéo de test courte."""
     
-    # URL de Vidéo de Test ULTRA-COURTE (environ 5 secondes, MP4)
-    video_url = "https://test-videos.co.uk/vids/mp4/360/MP4-5s.mp4" 
+    # Nouvelle URL (source Google, généralement très fiable pour les tests) :
+    video_url = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
     
     # Générer la description (texte)
     try:
