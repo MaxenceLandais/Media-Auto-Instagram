@@ -8,10 +8,10 @@ import mimetypes
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-# Imports pour Imagen (Vertex AI) - CORRIGÉS POUR ÉVITER LES ERREURS DE NOMMAGE
+# Imports pour Imagen (Vertex AI) - CORRIGÉS POUR ÉVITER ModuleNotFoundError
 from google.cloud import aiplatform 
 from google.cloud.aiplatform_v1.services.prediction_service import PredictionServiceClient
-from google.cloud.aiplatform_v1.types.predict_service import PredictRequest # Import explicite de la classe
+from google.cloud.aiplatform_v1 import types # <--- CORRECTION D'IMPORT FINAL
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value  # Import explicite pour les paramètres de requête
 from bs4 import BeautifulSoup 
@@ -172,8 +172,8 @@ def generate_and_fetch_image_data(topic):
             "negative_prompt": "text, bad quality, blurry, watermark, low resolution, ugly",
         }
 
-        # Création de la requête. Utilise les classes PredictRequest et Value importées explicitement
-        request = PredictRequest(
+        # Création de la requête. Utilise types.PredictRequest et Value
+        request = types.PredictRequest( # <-- UTILISATION CORRECTE DE LA CLASSE IMPORTÉE VIA ALIAS
             endpoint=endpoint_name,
             instances=[{"prompt": image_prompt}],
             parameters=json_format.ParseDict(parameters_dict, Value()), 
