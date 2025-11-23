@@ -11,7 +11,7 @@ from google.genai.errors import APIError
 # Imports pour Imagen (Vertex AI) - CORRIGÉS POUR ÉVITER ModuleNotFoundError
 from google.cloud import aiplatform 
 from google.cloud.aiplatform_v1.services.prediction_service import PredictionServiceClient
-from google.cloud.aiplatform_v1 import types # <--- CORRECTION D'IMPORT FINAL
+from google.cloud.aiplatform_v1 import types # Utilise l'alias pour le module types
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value  # Import explicite pour les paramètres de requête
 from bs4 import BeautifulSoup 
@@ -171,11 +171,14 @@ def generate_and_fetch_image_data(topic):
             "outputMimeType": "image/jpeg",
             "negative_prompt": "text, bad quality, blurry, watermark, low resolution, ugly",
         }
+        
+        # CORRECTION CLÉ : Convertit l'instance (prompt) en objet Protobuf Value
+        instance_struct = json_format.ParseDict({"prompt": image_prompt}, Value()) 
 
         # Création de la requête. Utilise types.PredictRequest et Value
-        request = types.PredictRequest( # <-- UTILISATION CORRECTE DE LA CLASSE IMPORTÉE VIA ALIAS
+        request = types.PredictRequest(
             endpoint=endpoint_name,
-            instances=[{"prompt": image_prompt}],
+            instances=[instance_struct], # Utilise l'objet converti dans une liste
             parameters=json_format.ParseDict(parameters_dict, Value()), 
         )
         
