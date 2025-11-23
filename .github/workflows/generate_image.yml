@@ -33,31 +33,43 @@ jobs:
       id: 'auth'
       # Cette étape utilise votre Secret GCS_SERVICE_ACCOUNT_KEY pour authentifier l'API
       run: |
-        # Crée un fichier temporaire pour la clé JSON. La clé DOIT être encodée en base64.
-        # Attention: Le secret doit être encodé en base64 pour éviter les problèmes de caractères.
+        # Crée un fichier temporaire pour la clé JSON. Le secret DOIT être encodé en base64.
+        # Attention: Vérifiez que le secret 'GCS_SERVICE_ACCOUNT_KEY' est le contenu ENCODÉ EN BASE64
+        # de votre fichier JSON de clé de compte de service.
         echo "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" | base64 -d > gcp_sa_key.json
         
         # Exporte le chemin vers ce fichier pour que le script Python l'utilise
         echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_sa_key.json" >> $GITHUB_ENV
         
     - name: Run Image Generation Script
+      # Cette étape exécute votre script Python. C'est ici que les images devraient être générées.
+      # Examinez attentivement les logs de cette étape si le commit échoue.
       run: python generate_image.py
 
-    - name: Commit and Push Generated Images (Optional)
-      # Cette étape est optionnelle mais essentielle si vous voulez que les images apparaissent sur GitHub
-      if: always()
+    - name: Commit and Push Generated Images
+      # Cette étape est essentielle si vous voulez que les images apparaissent sur GitHub
+      # Elle s'exécute 'always()' pour ne pas bloquer le workflow si la génération échoue,
+      # mais elle vérifie la présence de fichiers avant de tenter un commit.
+      if: always() 
       run: |
         # Configure le bot pour commiter
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         
-        # Ajoute les nouvelles images PNG générées
-        git add generated_images/*.png
-        
-        # Vérifie s'il y a de nouvelles images à commiter avant de le faire
-        if git diff --cached --quiet; then
-          echo "No new images to commit."
+        # Vérifie si le dossier de sortie existe et contient des fichiers PNG
+        # '> /dev/null 2>&1' redirige la sortie et les erreurs pour ne pas polluer les logs si aucun fichier n'est trouvé
+        if [ -d "generated_images" ] && ls generated_images/*.png > /dev/null 2>&1; then
+          echo "Des images générées ont été trouvées. Préparation du commit..."
+          git add generated_images/*.png
+          
+          # Vérifie s'il y a de NOUVELLES modifications à commiter (pour éviter un commit vide)
+          if git diff --cached --quiet; then
+            echo "Aucune nouvelle image à commiter (les fichiers sont identiques ou il n'y a pas de nouveaux fichiers)."
+          else
+            git commit -m "chore: Ajout d'images générées via le workflow Vertex AI"
+            git push
+            echo "Images générées committées et poussées avec succès sur le dépôt."
+          fi
         else
-          git commit -m "chore: Add newly generated images from Vertex AI workflow"
-          git push
+          echo "Aucune image PNG trouvée dans le répertoire 'generated_images' à committer. La génération a peut-être échoué."
         fi
