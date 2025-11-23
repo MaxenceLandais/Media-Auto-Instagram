@@ -4,10 +4,10 @@ import datetime
 from google.cloud import aiplatform
 
 # --- IMPORTS POUR L'API DE PRÉDICTION ---
+# Utilisation du client v1beta1 pour les modèles de fondation
 from google.cloud.aiplatform_v1beta1.services.prediction_service import PredictionServiceClient
-# L'import de PredictRequest n'est pas toujours strictement nécessaire si on utilise predict directement
-# from google.cloud.aiplatform_v1beta1.types import PredictRequest
-from google.cloud.aiplatform_v1beta1.types import Value # Nous utilisons la classe Value
+# Pas besoin d'importer 'Value' si on passe des dictionnaires directement
+# from google.cloud.aiplatform_v1beta1.types import Value 
 
 
 def generate_image_with_vertex_ai(
@@ -30,20 +30,19 @@ def generate_image_with_vertex_ai(
         client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
         client = PredictionServiceClient(client_options=client_options)
 
-        # Préparation des instances (le prompt)
-        # SUPPRESSION de ._pb car le client attend un objet Value directement
-        instances_proto = [
-            Value(struct_value={"prompt": prompt}) 
-        ]
+        # --- CHANGEMENT CLÉ ICI : PASSER DES DICTIONNAIRES JSON DIRECTEMENT ---
+        # Le client GAPIC peut souvent sérialiser des dictionnaires Python en structures Proto.
+        # Pour les instances (le prompt)
+        instances_json = [{"prompt": prompt}]
         
-        # Préparation des paramètres de génération (nombre d'images, taille, etc.)
-        # SUPPRESSION de ._pb
-        parameters_proto = Value(struct_value={
+        # Pour les paramètres de génération
+        parameters_json = {
             "sample_count": num_images,
             "width": image_width,
             "height": image_height,
             # "seed": 42 # Optionnel: pour la reproductibilité
-        }) 
+        }
+        # --- FIN DU CHANGEMENT CLÉ ---
 
         # Définition de l'endpoint du modèle de fondation (Publisher Model)
         endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}"
@@ -53,8 +52,8 @@ def generate_image_with_vertex_ai(
         # Appel à l'API de prédiction
         response = client.predict(
             endpoint=endpoint,
-            instances=instances_proto, # Passer la liste d'objets Value
-            parameters=parameters_proto # Passer l'objet Value
+            instances=instances_json,   # Passer la liste de dictionnaires
+            parameters=parameters_json  # Passer le dictionnaire
         )
 
         # Création du répertoire de sortie si nécessaire
@@ -65,7 +64,8 @@ def generate_image_with_vertex_ai(
         # Traitement de la réponse et sauvegarde des images
         if response and response.predictions:
             for i, prediction_value in enumerate(response.predictions):
-                # Chaque prédiction est un objet Value contenant un dictionnaire struct_value
+                # La réponse devrait toujours contenir des objets Value, 
+                # donc on extrait le struct_value comme avant.
                 prediction_dict = prediction_value.struct_value
                 if "bytesBase64Encoded" in prediction_dict:
                     image_bytes = base64.b64decode(prediction_dict["bytesBase64Encoded"])
