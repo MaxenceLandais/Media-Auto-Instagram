@@ -8,12 +8,12 @@ import mimetypes
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-# Imports pour Imagen (Vertex AI)
+# Imports pour Imagen (Vertex AI) - CORRIGÉS POUR ÉVITER LES ERREURS DE NOMMAGE
 from google.cloud import aiplatform 
 from google.cloud.aiplatform_v1.services.prediction_service import PredictionServiceClient
-# Correction de l'import : utilise le type de valeur Protobuf standard
+from google.cloud.aiplatform_v1.types.predict_service import PredictRequest # Import explicite de la classe
 from google.protobuf import json_format
-from google.protobuf.struct_pb2 import Value  # <--- CORRECTION CLÉ : Importe le type Value()
+from google.protobuf.struct_pb2 import Value  # Import explicite pour les paramètres de requête
 from bs4 import BeautifulSoup 
 import base64
 
@@ -150,7 +150,7 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # 2. Appel à l'API Imagen (Vertex AI) - CORRIGÉ
+    # 2. Appel à l'API Imagen (Vertex AI)
     print("\n--- 2. Appel à l'API Imagen (Vertex AI) ---")
     try:
         aiplatform.init(project=GCP_PROJECT_ID, location=GCP_REGION)
@@ -172,11 +172,11 @@ def generate_and_fetch_image_data(topic):
             "negative_prompt": "text, bad quality, blurry, watermark, low resolution, ugly",
         }
 
-        # Création de la requête. Utilise Value() pour le format des paramètres
-        request = aiplatform_types.PredictRequest(
+        # Création de la requête. Utilise les classes PredictRequest et Value importées explicitement
+        request = PredictRequest(
             endpoint=endpoint_name,
             instances=[{"prompt": image_prompt}],
-            parameters=json_format.ParseDict(parameters_dict, Value()), # <--- CORRECTION APPLIQUÉE
+            parameters=json_format.ParseDict(parameters_dict, Value()), 
         )
         
         # Envoi de la requête
