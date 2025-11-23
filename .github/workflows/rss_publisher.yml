@@ -1,10 +1,8 @@
-# .github/workflows/rss_publisher.yml (ou main.yml)
-
 name: Publish RSS to Instagram
 
 on:
   schedule:
-    # Exécute tous les jours à 8h00 UTC (ajustez l'heure selon votre besoin)
+    # Exécute tous les jours à 8h00 UTC (à ajuster)
     - cron: '0 8 * * *'
   workflow_dispatch:
 
@@ -21,24 +19,25 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: Install dependencies and jq 🔧
         run: |
+          # Installation de jq, l'outil nécessaire pour nettoyer le secret JSON
+          sudo apt-get update && sudo apt-get install -y jq
+          
           python -m pip install --upgrade pip
-          # Assurez-vous que toutes les dépendances, y compris google-cloud-aiplatform, sont dans requirements.txt
           pip install -r requirements.txt
 
       - name: Run Python Script with Imagen Authentication FIX 🔑
-        # Cette étape utilise un script shell pour résoudre l'erreur ADC
+        # Cette étape garantit que le secret est un JSON propre pour l'ADC
         run: |
           echo "--- Préparation des identifiants Vertex AI (ADC) ---"
           
-          # 1. Créer le fichier credentials.json à partir du secret GCS_SERVICE_ACCOUNT_KEY
-          # La variable $GITHUB_WORKSPACE est le répertoire racine du projet
+          # 1. Nettoyer et créer le fichier JSON
+          # Utilisation de 'jq -r .' pour s'assurer que le secret est un JSON valide et sans guillemets ou espaces inutiles.
           CREDENTIALS_FILE="$GITHUB_WORKSPACE/gcp_sa_key.json"
-          echo "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" > $CREDENTIALS_FILE
+          echo "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" | jq -r '.' > $CREDENTIALS_FILE
           
           # 2. Définir la variable d'environnement GOOGLE_APPLICATION_CREDENTIALS
-          # C'est ce qui permet à la librairie google-cloud-aiplatform (Imagen) de s'authentifier
           export GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE
           
           echo "✅ Identifiants chargés pour l'API Google Cloud."
@@ -47,7 +46,7 @@ jobs:
           python rss_publisher.py
         
         env:
-          # ATTENTION : Remplacez les placeholders ci-dessous par VOS NOMS de secrets
+          # Assurez-vous que tous vos secrets sont listés ici
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
