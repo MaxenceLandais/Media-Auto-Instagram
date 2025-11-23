@@ -23,10 +23,10 @@ POST_TOPICS = [
 # --- 2. Fonctions de Génération de Contenu ---
 
 def generate_ai_content_and_caption(topic):
-    """Génère le texte (légende) et utilise une URL d'image statique et fiable (Google)."""
+    """Génère le texte (légende) et utilise une URL d'image statique et ultra-fiable."""
     
-    # NOUVELLE URL D'IMAGE DE TEST (Source Google Cloud Storage)
-    image_url = "http://commondatastorage.googleapis.com/codeskulptor-demos/ricer/splash_screen.png" 
+    # NOUVELLE URL D'IMAGE DE TEST (Source Unsplash, lien direct vers un JPEG)
+    image_url = "https://images.unsplash.com/photo-1621570776856-78b17208d08c" 
     
     # Générer la description (texte)
     try:
@@ -73,7 +73,7 @@ def check_media_status(creation_id, access_token):
     
     status_url = f"{GRAPH_BASE_URL}/{creation_id}?fields=status_code&access_token={access_token}"
     
-    max_checks = 6  # Attendre max 30 secondes pour une image
+    max_checks = 6 
     
     for i in range(max_checks):
         r = requests.get(status_url)
