@@ -23,10 +23,10 @@ POST_TOPICS = [
 # --- 2. Fonctions de Génération de Contenu ---
 
 def generate_ai_content_and_caption(topic):
-    """Génère le texte (légende) et utilise une URL d'image statique et fiable."""
+    """Génère le texte (légende) et utilise une URL d'image statique et fiable (Google)."""
     
-    # NOUVELLE URL (Source Wikimedia Commons - très fiable pour les tests API)
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/4/4e/A_random_picture_of_the_planet_Earth_from_space.jpg" 
+    # NOUVELLE URL D'IMAGE DE TEST (Source Google Cloud Storage)
+    image_url = "http://commondatastorage.googleapis.com/codeskulptor-demos/ricer/splash_screen.png" 
     
     # Générer la description (texte)
     try:
