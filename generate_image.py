@@ -3,19 +3,18 @@ import os
 import datetime
 from google.cloud import aiplatform
 
-# --- NOUVEAUX IMPORTS POUR L'API DE PRÉDICTION ---
-# C'est la manière générique et stable d'interagir avec les modèles de fondation
-# en utilisant les clients GAPIC (Google API Client Libraries).
+# --- IMPORTS POUR L'API DE PRÉDICTION ---
 from google.cloud.aiplatform_v1beta1.services.prediction_service import PredictionServiceClient
-from google.cloud.aiplatform_v1beta1.types import PredictRequest, Value
-# --- FIN NOUVEAUX IMPORTS ---
+# L'import de PredictRequest n'est pas toujours strictement nécessaire si on utilise predict directement
+# from google.cloud.aiplatform_v1beta1.types import PredictRequest
+from google.cloud.aiplatform_v1beta1.types import Value # Nous utilisons la classe Value
 
 
 def generate_image_with_vertex_ai(
     project_id: str,
     location: str,
     prompt: str,
-    model_name: str = "imagegeneration", # Nom du modèle de Google Publisher
+    model_name: str = "imagegeneration",
     output_dir: str = "generated_images",
     num_images: int = 1,
     image_width: int = 1024,
@@ -26,29 +25,27 @@ def generate_image_with_vertex_ai(
     Génère une ou plusieurs images en utilisant l'API Vertex AI via PredictionServiceClient.
     """
     try:
-        # Initialisation du client aiplatform pour la configuration globale (projet, région)
         aiplatform.init(project=project_id, location=location)
 
-        # Configuration du client de prédiction pour interagir avec le modèle spécifique
         client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
         client = PredictionServiceClient(client_options=client_options)
 
-        # Préparation des instances (le prompt pour la génération d'images)
-        # Chaque instance est un dictionnaire avec la clé "prompt".
+        # Préparation des instances (le prompt)
+        # SUPPRESSION de ._pb car le client attend un objet Value directement
         instances_proto = [
-            Value(struct_value={"prompt": prompt})._pb
+            Value(struct_value={"prompt": prompt}) 
         ]
         
         # Préparation des paramètres de génération (nombre d'images, taille, etc.)
+        # SUPPRESSION de ._pb
         parameters_proto = Value(struct_value={
             "sample_count": num_images,
             "width": image_width,
             "height": image_height,
-            # "seed": 42 # Optionnel: pour la reproductibilité (décommenter si vous voulez un seed fixe)
-        })._pb
+            # "seed": 42 # Optionnel: pour la reproductibilité
+        }) 
 
         # Définition de l'endpoint du modèle de fondation (Publisher Model)
-        # publishers/google/models/imagegeneration est le chemin standard.
         endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}"
 
         print(f"Tentative de génération de {num_images} image(s) avec le prompt: '{prompt}' via l'endpoint '{endpoint}'...")
@@ -56,8 +53,8 @@ def generate_image_with_vertex_ai(
         # Appel à l'API de prédiction
         response = client.predict(
             endpoint=endpoint,
-            instances=instances_proto,
-            parameters=parameters_proto
+            instances=instances_proto, # Passer la liste d'objets Value
+            parameters=parameters_proto # Passer l'objet Value
         )
 
         # Création du répertoire de sortie si nécessaire
@@ -90,23 +87,21 @@ def generate_image_with_vertex_ai(
         print(f"ERREUR: Une erreur est survenue lors de la génération d'images: {e}")
         print("\nPoints à vérifier impérativement:")
         print("1. **Permissions:** Le compte de service ('media-upload-key') doit avoir le rôle 'Utilisateur Vertex AI' (ou 'Generative AI User').")
-        print("2. **Authentification:** La variable d'environnement GOOGLE_APPLICATION_CREDENTIALS doit pointer vers la clé JSON encodée en base64.")
+        print("2. **Authentification:** La variable d'environnement GOOGLE_APPLICATION_CREDENTIALS doit être correctement définie et pointer vers la clé JSON.")
         print("3. **Nom du Modèle:** 'imagegeneration' est le nom correct pour le modèle de Google Publisher.")
         print("4. **Région:** 'us-central1' est la région recommandée et où le modèle est le plus souvent disponible.")
         print("5. **Quotas:** Vérifiez les quotas pour l'API de génération d'images dans votre projet GCP.")
 
 if __name__ == "__main__":
-    # --- CONFIGURATION PRINCIPALE ---
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1" 
     my_prompt = "Un portrait d'un robot détective dans un style cyberpunk, éclairage néon, haute résolution."
 
-    # --- APPEL DE LA FONCTION ---
     generate_image_with_vertex_ai(
         project_id=PROJECT_ID,
         location=LOCATION,
         prompt=my_prompt,
-        model_name="imagegeneration", # Utilisez bien "imagegeneration" ici
+        model_name="imagegeneration",
         num_images=1,
         image_width=1024,
         image_height=1024,
