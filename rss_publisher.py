@@ -3,12 +3,11 @@ import requests
 import json
 import time
 import feedparser
-import io # Ajout/confirmation de l'import pour la gestion des données binaires d'image
+import io
 import mimetypes 
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-# Suppression des imports Vertex AI (aiplatform, types, PredictRequest) pour plus de simplicité
 from bs4 import BeautifulSoup 
 import base64
 
@@ -29,7 +28,7 @@ GCS_PLACEHOLDER_URL = "https://picsum.photos/1200/800"
 # Variables Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Variables GCP/Vertex AI (Réduites, plus de besoin des imports aiplatform)
+# Variables GCP/Vertex AI
 GCP_PROJECT_ID = "media-auto-instagram" 
 GCP_REGION = "us-central1" 
 
@@ -145,7 +144,7 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # 2. Appel à l'API Gemini (Génération d'images) - REMPLACE L'APPEL VERTEX AI
+    # 2. Appel à l'API Gemini (Génération d'images) - NOUVELLE TENTATIVE
     print("\n--- 2. Appel à l'API Gemini (Génération d'images) ---")
     try:
         # Initialisation du client (déjà fait ci-dessus, mais bonne pratique de l'assurer)
@@ -153,6 +152,7 @@ def generate_and_fetch_image_data(topic):
         
         # Appel au modèle de génération d'images (Imagen 3.0 via l'API Gemini)
         result = gemini_client.models.generate_images(
+            # Utilisation du nom de modèle complet pour être sûr
             model='imagen-3.0-generate-002',
             prompt=image_prompt,
             config=dict(
@@ -260,7 +260,6 @@ def get_instagram_business_id():
             print("❌ Erreur: Compte Instagram Business non trouvé lié à la Page Facebook.")
             return None
     except requests.exceptions.HTTPError as e:
-        # L'erreur 400 ou 403 est généralement un problème de jeton ou de permissions
         print(f"❌ Échec de la requête d'ID Instagram (HTTP): {e}")
         return None
     except Exception as e:
