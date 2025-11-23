@@ -103,7 +103,7 @@ def generate_image_with_vertex_ai(
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1"
-    my_prompt = "Un petit chaton joueur sur une pelouse ensoleillée, style dessin animé."
+    my_prompt = "Fais une infographie journalistique pour instagram pour annoncer les 10 ans des attentas du Bataclan qui ont eu lieu le 13 novembre 2015 en France."
 
     generate_image_with_vertex_ai(
         project_id=PROJECT_ID,
