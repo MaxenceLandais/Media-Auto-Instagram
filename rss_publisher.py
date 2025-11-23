@@ -8,8 +8,11 @@ import mimetypes
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-# Imports pour Imagen (Vertex AI)
+# Nouveaux imports pour l'appel Imagen via PredictionServiceClient
 from google.cloud import aiplatform 
+from google.cloud.aiplatform_v1.services.prediction_service import PredictionServiceClient
+from google.cloud.aiplatform_v1.types.predict_request import PredictRequest
+from google.protobuf import json_format
 from bs4 import BeautifulSoup 
 import base64
 
@@ -146,43 +149,53 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # 2. Appel à l'API Imagen (Vertex AI) - CORRIGÉ pour les imports
+    # 2. Appel à l'API Imagen (Vertex AI) - CORRIGÉ
     print("\n--- 2. Appel à l'API Imagen (Vertex AI) ---")
     try:
         aiplatform.init(project=GCP_PROJECT_ID, location=GCP_REGION)
         
-        model_name = "imagegeneration@006" # Modèle stable et récent
-        model = aiplatform.Model.list(filter=f'display_name="{model_name}"')[0]
-
-        # Les instances et les paramètres doivent être passés sous forme de dictionnaires
-        instances = [{
-            "prompt": image_prompt,
-            "number_of_images": 1,
-            "sample_count": 1 
-        }]
-        
-        parameters = {
-            "aspect_ratio": "1:1",
-            "negative_prompt": "text, bad quality, blurry, watermark"
-        }
-
-        response_imagen = model.predict(
-            instances=instances,
-            parameters=parameters
+        # Le nom complet de l'endpoint public pour la génération d'images (Imagen 3.0)
+        endpoint_name = (
+            f"projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/publishers/google/models/imagen-3.0-generate-002"
         )
         
-        if response_imagen.predictions and response_imagen.predictions[0].get('image'):
-            img_data_b64 = response_imagen.predictions[0]['image']['image_bytes']
+        # Préparation du client et de la requête via le PredictionServiceClient
+        client_options = {"api_endpoint": f"{GCP_REGION}-aiplatform.googleapis.com"}
+        client = PredictionServiceClient(client_options=client_options)
+
+        # Les paramètres doivent être passés en JSON valide (via un dictionnaire)
+        parameters_dict = {
+            "aspectRatio": "1:1",
+            "number_of_images": 1,
+            "outputMimeType": "image/jpeg",
+            "negative_prompt": "text, bad quality, blurry, watermark, low resolution, ugly",
+        }
+
+        # Création de la requête
+        request = PredictRequest(
+            endpoint=endpoint_name,
+            instances=[{"prompt": image_prompt}],
+            parameters=json_format.ParseDict(parameters_dict, aiplatform.types.Value()),
+        )
+        
+        # Envoi de la requête
+        response_imagen = client.predict(request=request)
+        
+        # Traitement de la réponse
+        if response_imagen.predictions:
+            # L'image générée est contenue dans le champ 'bytesBase64'
+            img_data_b64 = response_imagen.predictions[0].get('bytesBase64')
             
-            image_binary = base64.b64decode(img_data_b64)
-            content_type = 'image/jpeg' 
-            file_extension = '.jpeg'
-            
-            print("✅ Image générée par Imagen (Vertex AI) !")
-            return image_binary, file_extension, content_type
-        else:
-            print("❌ Imagen n'a retourné aucune image. Repli sur le placeholder.")
-            return fetch_media_data(GCS_PLACEHOLDER_URL)
+            if img_data_b64:
+                image_binary = base64.b64decode(img_data_b64)
+                content_type = 'image/jpeg' 
+                file_extension = '.jpeg'
+                
+                print("✅ Image générée par Imagen (Vertex AI) !")
+                return image_binary, file_extension, content_type
+
+        print("❌ Imagen n'a retourné aucune image. Repli sur le placeholder.")
+        return fetch_media_data(GCS_PLACEHOLDER_URL)
             
     except Exception as e:
         print(f"❌ Échec critique de l'appel à Imagen. Erreur: {e}. Repli sur le placeholder.")
