@@ -1,34 +1,53 @@
-name: 📰 Publication Quotidienne Instagram (RSS + IA)
+# .github/workflows/rss_publisher.yml (ou main.yml)
+
+name: Publish RSS to Instagram
 
 on:
-  # Déclenchement manuel pour les tests
-  workflow_dispatch:
-  # Déclenchement quotidien à minuit UTC (ajustez si besoin)
   schedule:
-    - cron: '0 0 * * *' 
+    # Exécute tous les jours à 8h00 UTC (ajustez l'heure selon votre besoin)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 jobs:
-  publish_rss_post:
+  publish:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: ⬇️ Checkout du code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐍 Configuration de Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: 📦 Installation des dépendances
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Installe toutes les dépendances listées dans requirements.txt
-          pip install -r requirements.txt 
+          # Assurez-vous que toutes les dépendances, y compris google-cloud-aiplatform, sont dans requirements.txt
+          pip install -r requirements.txt
 
-      - name: 🚀 Exécution du script de publication RSS sur Instagram
-        run: python rss_publisher.py
+      - name: Run Python Script with Imagen Authentication FIX 🔑
+        # Cette étape utilise un script shell pour résoudre l'erreur ADC
+        run: |
+          echo "--- Préparation des identifiants Vertex AI (ADC) ---"
+          
+          # 1. Créer le fichier credentials.json à partir du secret GCS_SERVICE_ACCOUNT_KEY
+          # La variable $GITHUB_WORKSPACE est le répertoire racine du projet
+          CREDENTIALS_FILE="$GITHUB_WORKSPACE/gcp_sa_key.json"
+          echo "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" > $CREDENTIALS_FILE
+          
+          # 2. Définir la variable d'environnement GOOGLE_APPLICATION_CREDENTIALS
+          # C'est ce qui permet à la librairie google-cloud-aiplatform (Imagen) de s'authentifier
+          export GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE
+          
+          echo "✅ Identifiants chargés pour l'API Google Cloud."
+          
+          # 3. Exécuter le script
+          python rss_publisher.py
+        
         env:
+          # ATTENTION : Remplacez les placeholders ci-dessous par VOS NOMS de secrets
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
