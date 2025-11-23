@@ -1,0 +1,4 @@
+requests
+google-genai
+feedparser
+google-cloud-storage
