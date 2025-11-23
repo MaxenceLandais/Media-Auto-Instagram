@@ -8,12 +8,12 @@ import mimetypes
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-# Imports pour Imagen (Vertex AI) - CORRIGÉS
+# Imports pour Imagen (Vertex AI)
 from google.cloud import aiplatform 
 from google.cloud.aiplatform_v1.services.prediction_service import PredictionServiceClient
-# Correction de l'import défaillant : nous importons le module entier
-from google.cloud.aiplatform_v1 import types as aiplatform_types 
+# Correction de l'import : utilise le type de valeur Protobuf standard
 from google.protobuf import json_format
+from google.protobuf.struct_pb2 import Value  # <--- CORRECTION CLÉ : Importe le type Value()
 from bs4 import BeautifulSoup 
 import base64
 
@@ -172,11 +172,11 @@ def generate_and_fetch_image_data(topic):
             "negative_prompt": "text, bad quality, blurry, watermark, low resolution, ugly",
         }
 
-        # Création de la requête. Utilise le type corrigé PredictRequest (accessible via le service)
+        # Création de la requête. Utilise Value() pour le format des paramètres
         request = aiplatform_types.PredictRequest(
             endpoint=endpoint_name,
             instances=[{"prompt": image_prompt}],
-            parameters=json_format.ParseDict(parameters_dict, aiplatform.types.Value()),
+            parameters=json_format.ParseDict(parameters_dict, Value()), # <--- CORRECTION APPLIQUÉE
         )
         
         # Envoi de la requête
@@ -406,7 +406,7 @@ if __name__ == "__main__":
         exit(1)
         
     # 4. GÉNÉRATION DE LA LÉGENDE
-    caption = generate_ai_caption(topic, article_link=article_link) 
+    caption = generate_ai_caption(topic, article_link=article.link) 
     print(f"\nLégende générée (début) : {caption[:50]}...")
     
     # 5. PUBLICATION INSTAGRAM
