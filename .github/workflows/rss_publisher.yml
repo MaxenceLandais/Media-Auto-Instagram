@@ -21,42 +21,33 @@ jobs:
 
       - name: Install dependencies and jq 🔧
         run: |
-          # Installation de jq (pour la validation JSON) et les dépendances Python
           sudo apt-get update && sudo apt-get install -y jq
           
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Python Script with Imagen Authentication FIX 🔑
-        # Cette étape résout le problème de formatage JSON (parse error)
+      # NOTE IMPORTANTE : La logique d'écriture de la clé JSON sur le disque
+      # et la définition de GOOGLE_APPLICATION_CREDENTIALS sont MODIFIÉES.
+      # Le script Python décode GCS_SERVICE_ACCOUNT_KEY en Base64 et l'utilise
+      # directement pour 'google.cloud.storage.Client.from_service_account_info'.
+      # La librairie 'google.cloud.aiplatform' s'initialise avec project_id et location
+      # et utilise les variables d'environnement Google standard (ADC) si elles sont configurées.
+      # Pour simplifier, nous passons la clé encodée en base64 directement.
+      - name: Run Python Script 🚀
         run: |
-          echo "--- Préparation des identifiants Vertex AI (ADC) ---"
-          
-          CREDENTIALS_FILE="$GITHUB_WORKSPACE/gcp_sa_key.json"
-          
-          # 1. Écrire le secret JSON multiligne dans le fichier.
-          # L'utilisation de 'cat <<EOF' est la méthode la plus fiable pour les clés multilignes
-          # car elle préserve la structure exacte du JSON, y compris les sauts de ligne.
-          cat > $CREDENTIALS_FILE <<EOF
-          ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
-          EOF
-          
-          # 2. Vérification de la validité JSON (le 'jq -e .' garantit que le fichier est valide)
-          echo "Vérification de la validité JSON..."
-          jq -e . $CREDENTIALS_FILE
-          
-          # 3. Définir la variable d'environnement GOOGLE_APPLICATION_CREDENTIALS
-          # C'est ce qui permet à la librairie google-cloud-aiplatform de s'authentifier
-          export GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE
-          
-          echo "✅ Identifiants chargés pour l'API Google Cloud."
-          
-          # 4. Exécuter le script
+          # Exécute le script principal. Les clés sont passées via les variables d'environnement.
+          # Le script Python est maintenant responsable du décodage de GCS_SERVICE_ACCOUNT_KEY.
           python rss_publisher.py
-        
         env:
-          # Assurez-vous que tous vos secrets sont listés ici
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Passez GCS_SERVICE_ACCOUNT_KEY directement, le script Python le décodera.
           GCS_SERVICE_ACCOUNT_KEY: ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
+
+      # Optionnel : Si vous voulez que les images générées soient conservées comme artefacts
+      # - name: Upload generated images as artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: generated-images
+      #     path: generated_images/
