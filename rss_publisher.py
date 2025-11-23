@@ -1,228 +1,285 @@
 import os
 import requests
 import json
-import time 
+import time
 import feedparser
+import io
+from google.cloud import storage
+# Importation de l'API Gemini pour la génération d'images et de texte
 from google import genai
-from google.cloud import storage 
-from io import BytesIO 
-import mimetypes 
-from bs4 import BeautifulSoup # <--- IMPORT AJOUTÉ
+from google.genai.errors import APIError
 
-# --- 1. Configuration et Clés (Secrets GitHub) ---
-# (Configuration inchangée)
+# ==============================================================================
+# 1. CONFIGURATION GLOBALE & SECRETS (Doit être configuré via GitHub Secrets)
+# ==============================================================================
+
+# Variables Meta (Instagram/Facebook)
 PAGE_ID = os.getenv("FB_PAGE_ID")
-ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN") 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
+ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN")
+GRAPH_BASE_URL = "https://graph.facebook.com/v19.0"
+
+# Variables Google Cloud Storage (GCS)
 GCS_SERVICE_ACCOUNT_KEY = os.getenv("GCS_SERVICE_ACCOUNT_KEY")
+GCS_BUCKET_NAME = "media-auto-instagram" # Remplacez par le nom de votre bucket GCS
+GCS_PLACEHOLDER_URL = "https://example.com/placeholder-image.jpg" # URL d'une image de secours statique si nécessaire
 
-GRAPH_BASE_URL = "https://graph.facebook.com/v18.0"
+# Variables Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Configuration RSS (Google News, ultra-stable avec User-Agent)
-RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr" 
-RSS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+# ==============================================================================
+# 2. FONCTIONS D'ACQUISITION DE DONNÉES ET DE MÉDIA
+# ==============================================================================
 
-# Configuration GCS
-GCS_BUCKET_NAME = "media-auto-instagram" 
-GCS_BASE_URL = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}"
-
-
-# --- 2. Fonctions GCS (Téléversement - INCHANGÉE) ---
-
-def upload_to_gcs_and_get_url(image_data, file_name, content_type='image/jpeg'):
-    """Téléverse l'image dans GCS en utilisant la clé de service."""
-    
-    print(f"\n--- Tentative de téléversement vers GCS: {file_name} ---")
-    
+def get_latest_rss_article(rss_url="https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr"):
+    """Récupère le dernier article d'un flux RSS de Google News."""
+    print(f"--- Tentative de récupération RSS depuis : {rss_url} ---")
     try:
-        credentials = json.loads(GCS_SERVICE_ACCOUNT_KEY)
-        client = storage.Client.from_service_account_info(credentials)
-        bucket = client.bucket(GCS_BUCKET_NAME)
-    except Exception as e:
-        print(f"❌ Échec de l'authentification GCS. Vérifiez GCS_SERVICE_ACCOUNT_KEY. Erreur: {e}")
-        return None
+        feed = feedparser.parse(rss_url)
+        if not feed.entries:
+            print("❌ Aucun article trouvé dans le flux RSS.")
+            return None
 
-    try:
-        blob = bucket.blob(file_name)
+        article = feed.entries[0]
+        print(f"✅ Article RSS trouvé: '{article.title}'")
         
-        # Téléversement de l'image
-        blob.upload_from_file(BytesIO(image_data), content_type=content_type)
+        # Le lien du média d'origine n'est pas toujours dans le RSS de Google News,
+        # on peut l'ajouter si la source est une autre qui le fournit.
+        media_url = article.get('media_content', [{}])[0].get('url') if article.get('media_content') else None
         
-        public_url = f"{GCS_BASE_URL}/{file_name}"
-        print(f"✅ Téléversement GCS réussi. URL: {public_url}")
-        return public_url
-    except Exception as e:
-        print(f"❌ Échec du téléversement vers GCS. Erreur: {e}")
-        return None
-
-
-# --- 3. Fonctions d'Acquisition de Contenu (MODIFIÉES) ---
-
-def extract_media_url_from_entry(entry):
-    """Essaie de trouver l'URL d'une image ou d'une vidéo dans une entrée RSS."""
-    
-    # 1. Tenter l'extraction via la balise Media RSS
-    if 'media_content' in entry:
-        for media in entry.media_content:
-            if 'url' in media and media.get('type', '').startswith(('image/', 'video/')):
-                print(f"   --> Média trouvé via media:content: {media.url}")
-                return media.url
-
-    # 2. Tenter l'extraction via les balises <img> dans le HTML (description ou summary)
-    content_html = entry.get('description', '') or entry.get('summary', '') or entry.get('content', [{}])[0].get('value', '')
-    
-    if content_html:
-        soup = BeautifulSoup(content_html, 'html.parser')
+        # Création d'un objet simple pour retourner les données
+        class Article:
+            def __init__(self, title, link, media_url=None):
+                self.title = title
+                self.link = link
+                self.media_url = media_url
         
-        # Recherche de balises <img>
-        img_tag = soup.find('img')
-        if img_tag and img_tag.get('src'):
-            print(f"   --> Image trouvée dans le contenu HTML: {img_tag['src']}")
-            return img_tag['src']
-            
-    return None
-
-
-def get_latest_rss_article():
-    """Récupère le dernier article et tente de trouver une URL média."""
-    print(f"\n--- Tentative de récupération RSS depuis : {RSS_FEED_URL} ---")
-    
-    try:
-        feed = feedparser.parse(RSS_FEED_URL, agent=RSS_USER_AGENT)
-        
-        if feed.status not in (200, 301, 302):
-             print(f"❌ Échec de la requête RSS. Statut HTTP: {feed.status}")
-             return None
-
-        if feed.entries:
-            article = feed.entries[0]
-            print(f"✅ Article RSS trouvé: '{article.title}'")
-            
-            # Tenter d'extraire le média
-            article.media_url = extract_media_url_from_entry(article)
-            
-            return article
-        
-        print("❌ Flux RSS valide mais aucune entrée trouvée.")
-        return None
+        return Article(article.title, article.link, media_url)
         
     except Exception as e:
-        print(f"❌ Erreur critique lors de la lecture du flux RSS. Erreur: {e}")
+        print(f"❌ Erreur lors de la récupération du flux RSS : {e}")
         return None
 
-
-def fetch_media_data(media_url):
-    """Télécharge le média à partir de son URL."""
-    
-    print(f"\n--- Tentative de téléchargement du média d'origine: {media_url} ---")
-    
+def fetch_media_data(url):
+    """Télécharge les données d'un média (image ou vidéo) à partir d'une URL."""
+    if not url:
+        return None, None, None
     try:
-        r = requests.get(media_url, stream=True, headers={'User-Agent': RSS_USER_AGENT}, timeout=15)
+        r = requests.get(url, timeout=15)
         r.raise_for_status()
+        content_type = r.headers.get('Content-Type', '').split(';')[0].strip()
         
-        content_type = r.headers.get('Content-Type', '').lower()
-        
-        if content_type.startswith('image/') or content_type.startswith('video/'):
-            file_extension = mimetypes.guess_extension(content_type, strict=True) 
-            if not file_extension:
-                # Fallback pour les images sans extension claire (ex: .jpeg)
-                if 'jpeg' in content_type or 'jpg' in content_type:
-                    file_extension = ".jpeg"
-                elif 'png' in content_type:
-                    file_extension = ".png"
-                elif 'mp4' in content_type or 'video' in content_type:
-                    file_extension = ".mp4"
-                else:
-                    file_extension = ".dat" # Type inconnu
-            
-            print(f"✅ Média d'origine téléchargé (Type: {content_type}). Extension: {file_extension}")
-            return r.content, file_extension, content_type
-        else:
-            print(f"❌ L'URL n'a pas renvoyé un type de média valide (Type: {content_type}).")
+        if not content_type.startswith(('image/', 'video/')):
+            print(f"   Avertissement : Type de contenu non supporté ({content_type}).")
             return None, None, None
-            
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Échec du téléchargement du média d'origine. Erreur: {e}")
-        return None, None, None
 
-def generate_and_fetch_image_data(topic):
-    """(Fonction de secours) Génère une description d'image IA, puis récupère une image via un placeholder fiable."""
-    
-    # ... (Le reste de cette fonction reste inchangé, utilisant le placeholder picsum.photos) ...
-    # Nous allons la simplifier pour cet exemple pour se concentrer sur la logique principale.
-    
-    print(f"\n--- Génération d'image IA de secours pour le sujet: '{topic}' ---")
-    
-    try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        extension = '.' + content_type.split('/')[-1]
         
-        # 1. Génération de la description d'image par l'IA
-        # (Prompt simple pour la démo)
-        prompt_image_description = f"Génère une description courte pour une image représentant visuellement : '{topic}'."
-        response_image_description = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt_image_description
-        )
-        image_prompt = response_image_description.text.strip()
-        print(f"✅ Description d'image IA générée: '{image_prompt}'")
+        # Dans le cas d'une vidéo (Reel), s'assurer qu'elle n'est pas trop longue
+        # La vérification de la taille/durée est plus complexe sans télécharger tout le fichier.
+        # Pour l'instant, on se contente du type.
         
-        # 2. Téléchargement d'un placeholder
-        placeholder_image_url = "https://picsum.photos/seed/" + str(hash(topic) % 1000) + "/1200/800"
-        r = requests.get(placeholder_image_url, stream=True, headers={'User-Agent': RSS_USER_AGENT})
-        r.raise_for_status()
-        
-        content_type = r.headers.get('Content-Type')
-        file_extension = mimetypes.guess_extension(content_type, strict=True) or ".jpeg"
-        print(f"✅ Image PLACEHOLDER téléchargée (Type: {content_type}).")
-        
-        return r.content, file_extension, content_type
-
-            
+        return r.content, extension, content_type
     except Exception as e:
-        print(f"❌ Échec de la génération de l'image de secours. Erreur: {e}")
+        print(f"   ❌ Échec du téléchargement du média depuis {url} : {e}")
         return None, None, None
 
-def generate_ai_caption(topic, article_link=None):
-    # (Fonction inchangée)
-    prompt = f"Génère une légende de publication Instagram percutante sur le sujet médiatique : '{topic}'. "
-    if article_link:
-        prompt += f"Ajoute une incitation à lire l'article complet ici: {article_link}. "
-    prompt += "Le ton doit être factuel et engageant. Termine par 3 hashtags pertinents."
-    
+
+# ==============================================================================
+# 3. FONCTIONS IA & CLOUD STORAGE (GCS)
+# ==============================================================================
+
+def generate_ai_caption(topic, article_link):
+    """Génère une légende de post Instagram et des hashtags via l'IA."""
+    if not GEMINI_API_KEY:
+        print("❌ Erreur: GEMINI_API_KEY non configurée.")
+        return f"Nouvelles importantes : {topic}"
+        
+    print("--- Génération de légende IA en cours ---")
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        prompt = (
+            f"Agis comme un rédacteur de 'flash info' sur Instagram. Écris une légende concise "
+            f"(moins de 2200 caractères) et percutante pour un post concernant l'article suivant : "
+            f"'{topic}'.\n\n"
+            f"Le format doit être : 🔴 FLASH INFO : (Titre accrocheur et résumé)... Laisse trois lignes, puis une section d'hashtags pertinents (ex: #Ukraine #Guerre #Politique #FlashInfo...)."
+            f"Ajoute le lien de l'article à la fin de la légende : {article_link}"
+        )
+        
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=prompt
+            contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.7
+            )
         )
+        
         return response.text.strip()
+        
+    except APIError as e:
+        print(f"❌ Erreur d'API Gemini (Légende): {e}")
+        return f"🔴 FLASH INFO : Le sujet du jour est '{topic}'. Plus de détails : {article_link} #Actualité"
     except Exception as e:
-        print(f"Erreur de génération IA : {e}")
-        return f"🚨 Contenu IA de secours pour: {topic}. #Actualité #Info"
+        print(f"❌ Erreur inattendue (Légende): {e}")
+        return f"🔴 FLASH INFO : Le sujet du jour est '{topic}'. Plus de détails : {article_link} #Actualité"
 
 
-# --- 5. Main Execution (LOGIQUE DE SÉLECTION MODIFIÉE) ---
+def generate_and_fetch_image_data(topic):
+    """Génère une image via l'IA et retourne ses données binaires."""
+    if not GEMINI_API_KEY:
+        print("❌ Erreur: GEMINI_API_KEY non configurée. Utilisation de l'image de secours.")
+        return fetch_media_data(GCS_PLACEHOLDER_URL)
+        
+    print(f"--- Génération d'image IA de secours pour le sujet: '{topic}' ---")
 
-def publish_instagram_media(insta_id, media_url, caption, media_type):
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        # 1. Génération de la description pour DALL-E (ou tout autre modèle de génération d'image)
+        description_prompt = (
+            f"Génère une description simple, professionnelle et visuellement frappante, en une seule phrase, "
+            f"pour une image d'actualité illustrant le sujet suivant : '{topic}'. "
+            f"L'image doit être optimisée pour Instagram (carrée, 1080x1080) et avoir un style photo-réaliste, non-cartoon. "
+            f"Évite le texte dans l'image et concentre-toi sur le symbolisme et le contexte géopolitique (ex: drapeau, bâtiments officiels, poignée de main). Ne mentionne pas de noms propres."
+        )
+        
+        response_desc = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=description_prompt,
+            config=genai.types.GenerateContentConfig(temperature=0.5)
+        )
+        
+        image_prompt = response_desc.text.strip()
+        print(f"✅ Description d'image IA générée: '{image_prompt}'")
+
+        # 2. Génération de l'image (Simulation d'une API de génération d'image)
+        # NOTE: L'API de génération d'images n'est pas directement exposée ici, nous simulerons
+        # un retour d'image de substitution pour maintenir le flux du code.
+        # Si vous utilisez une API comme Imagen ou DALL-E, remplacez cette partie.
+        print("REMPLACEMENT: Simulation de la génération d'image par une image PLACEHOLDER.")
+        
+        media_data, extension, content_type = fetch_media_data(GCS_PLACEHOLDER_URL)
+        
+        if media_data:
+            print(f"✅ Image PLACEHOLDER téléchargée (Type: {content_type}).")
+            return media_data, extension, content_type
+        else:
+            return None, None, None
+
+    except APIError as e:
+        print(f"❌ Erreur d'API Gemini (Image): {e}")
+        return fetch_media_data(GCS_PLACEHOLDER_URL)
+    except Exception as e:
+        print(f"❌ Erreur inattendue (Image): {e}")
+        return fetch_media_data(GCS_PLACEHOLDER_URL)
+
+
+def upload_to_gcs_and_get_url(data, file_name, content_type):
+    """Téléverse un fichier binaire vers GCS et retourne son URL publique."""
+    if not GCS_SERVICE_ACCOUNT_KEY or not GCS_BUCKET_NAME:
+        print("❌ Erreur: GCS_SERVICE_ACCOUNT_KEY ou GCS_BUCKET_NAME non configuré.")
+        return None
+        
+    print(f"--- Tentative de téléversement vers GCS: {file_name} ---")
+    
+    try:
+        # Configuration des identifiants (nécessaire en environnement non-Cloud)
+        key_dict = json.loads(GCS_SERVICE_ACCOUNT_KEY)
+        credentials = genai.credentials.from_service_account_info(key_dict)
+        storage_client = storage.Client(credentials=credentials)
+        
+        bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(file_name)
+        
+        blob.upload_from_string(data, content_type=content_type)
+        
+        # Rendre le fichier public si nécessaire (dépend de la configuration du bucket)
+        blob.make_public() 
+        
+        gcs_url = blob.public_url
+        print(f"✅ Téléversement GCS réussi. URL: {gcs_url}")
+        return gcs_url
+    
+    except Exception as e:
+        print(f"❌ Échec du téléversement GCS : {e}")
+        return None
+
+
+# ==============================================================================
+# 4. FONCTIONS DE PUBLICATION INSTAGRAM (RÉORGANISÉES POUR ÉVITER NAMEERROR)
+# ==============================================================================
+
+def get_instagram_business_id():
+    """Récupère l'ID du compte Instagram Business lié à la Page Facebook."""
+    if not all([PAGE_ID, ACCESS_TOKEN]):
+         print("❌ Erreur: PAGE_ID ou ACCESS_TOKEN manquant pour l'API Meta.")
+         return None
+         
+    url = f"{GRAPH_BASE_URL}/{PAGE_ID}?fields=instagram_business_account&access_token={ACCESS_TOKEN}"
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        data = r.json()
+        if 'instagram_business_account' in data:
+            return data['instagram_business_account']['id']
+        else:
+            print("❌ Erreur: Compte Instagram Business non trouvé lié à la Page Facebook.")
+            print(json.dumps(data, indent=4))
+            return None
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ Échec de la requête d'ID Instagram (HTTP): {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération de l'ID Instagram : {e}")
+        return None
+
+def check_media_status(creation_id, access_token):
+    """Vérifie l'état de traitement du conteneur de média Instagram."""
+    status_url = f"{GRAPH_BASE_URL}/{creation_id}?fields=status_code&access_token={access_token}"
+    max_checks = 10 
+    for i in range(max_checks):
+        r = requests.get(status_url)
+        data = r.json()
+        status = data.get('status_code')
+        print(f"   [Vérification {i+1}/{max_checks}] Statut: {status}")
+        
+        if status == 'FINISHED':
+            return True
+        if status == 'ERROR':
+            print(f"   ❌ Erreur de traitement du conteneur {creation_id}. Détails: {json.dumps(data, indent=4)}")
+            return False
+            
+        time.sleep(5) 
+        
+    print(f"   ❌ Délai d'attente dépassé pour le conteneur {creation_id}.")
+    return False
+
+def publish_instagram_media(insta_id, media_url, caption, content_type): 
     """Effectue la publication d'image ou de vidéo en deux étapes sur Instagram."""
     
-    print(f"\n--- Début de la publication {media_type} sur Instagram ---")
-    
-    # Utilisez 'REELS' si c'est une vidéo, 'IMAGE' sinon
-    media_type_ig = 'REELS' if media_type.startswith('video') else 'IMAGE'
+    # Déterminer le type de média pour l'API
+    is_video = content_type.startswith('video/') or content_type.startswith('application/octet-stream') 
+    media_type_ig = 'REELS' if is_video else 'IMAGE'
+    media_type_str = 'vidéo/Reel' if is_video else 'image/Photo'
+
+    print(f"\n--- Début de la publication {media_type_str} ({media_type_ig}) sur Instagram ---")
     
     # 1. CRÉER LE CONTENEUR MÉDIA
     media_container_url = f"{GRAPH_BASE_URL}/{insta_id}/media"
     
     container_payload = {
-        "media_type": media_type_ig,           
-        "image_url": media_url, # image_url fonctionne pour les photos et les reels/videos courts hébergés
+        "media_type": media_type_ig,          
         "caption": caption,
         "access_token": ACCESS_TOKEN
     }
     
+    if is_video:
+        container_payload["video_url"] = media_url
+        container_payload["thumb_offset"] = 0 # Optionnel: définir le temps de la vignette
+    else:
+        container_payload["image_url"] = media_url
+
     r1 = requests.post(media_container_url, data=container_payload)
-    # ... (le reste du code est inchangé)
     data1 = r1.json()
     
     if r1.status_code != 200 or 'id' not in data1:
@@ -255,8 +312,10 @@ def publish_instagram_media(insta_id, media_url, caption, media_type):
         print("Erreur Meta (Publication finale):", json.dumps(data2, indent=4))
         return False
 
-# La fonction publish_instagram_image a été remplacée par publish_instagram_media (plus générale)
-# Mais on garde l'appel de check_media_status et get_instagram_business_id intact.
+
+# ==============================================================================
+# 5. MAIN EXECUTION
+# ==============================================================================
 
 if __name__ == "__main__":
     if not all([PAGE_ID, ACCESS_TOKEN, GEMINI_API_KEY, GCS_SERVICE_ACCOUNT_KEY]):
@@ -274,7 +333,8 @@ if __name__ == "__main__":
     media_data, file_extension, content_type = None, None, None
 
     # --- 2. LOGIQUE DE SÉLECTION DU MÉDIA ---
-    if article.get('media_url'):
+    if article.media_url:
+        print(f"Tentative de récupération du média d'origine : {article.media_url}")
         # Tenter de télécharger le média d'origine
         media_data, file_extension, content_type = fetch_media_data(article.media_url)
         
@@ -288,8 +348,8 @@ if __name__ == "__main__":
         exit(1)
     
     # Déterminer si c'est une image ou une vidéo pour le nom de fichier GCS
-    media_type = 'image' if content_type.startswith('image/') else 'video'
-    file_name = f"rss_{media_type}_{int(time.time())}{file_extension}"
+    media_type_base = 'image' if content_type.startswith('image/') else 'video'
+    file_name = f"rss_{media_type_base}_{int(time.time())}{file_extension}"
         
     # 3. TÉLÉVERSEMENT VERS GCS
     final_media_url = upload_to_gcs_and_get_url(media_data, file_name, content_type=content_type)
@@ -302,8 +362,12 @@ if __name__ == "__main__":
     print(f"\nLégende générée (début) : {caption[:50]}...")
     
     # 5. PUBLICATION INSTAGRAM
+    # C'est ici que l'erreur 'NameError' a été corrigée : la fonction est définie
+    # plus haut, ce qui permet à l'interpréteur de la trouver.
     insta_business_id = get_instagram_business_id()
+    
     if insta_business_id:
         print(f"✅ ID Instagram Business trouvé: {insta_business_id}")
-        # Appel de la nouvelle fonction générique
         publish_instagram_media(insta_business_id, final_media_url, caption, content_type)
+    else:
+        print("❌ Publication Instagram annulée car l'ID Business n'a pas pu être récupéré.")
