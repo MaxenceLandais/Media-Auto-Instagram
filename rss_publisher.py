@@ -21,7 +21,7 @@ from google.genai.errors import APIError
 
 
 # ==============================================================================
-# 1. CONFIGURATION GLOBALE & SECRETS (inchangé)
+# 1. CONFIGURATION GLOBALE & SECRETS
 # ==============================================================================
 
 # Variables Meta (Instagram/Facebook)
@@ -46,7 +46,7 @@ RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr"
 RSS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 # ==============================================================================
-# 2. FONCTIONS D'ACQUISITION DE DONNÉES ET DE MÉDIA (inchangé)
+# 2. FONCTIONS D'ACQUISITION DE DONNÉES ET DE MÉDIA
 # ==============================================================================
 
 def extract_media_url_from_entry(entry):
@@ -275,7 +275,7 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
         blob.upload_from_string(data, content_type=content_type)
         
         # Ligne SUPPRIMÉE (blob.make_public()) : pour éviter l'erreur UBLA/ACL.
-        # L'accès public est maintenant géré uniquement par la configuration IAM du bucket.
+        # L'accès public est maintenant géré uniquement par la configuration IAM du bucket (action manuelle).
         
         gcs_url = blob.public_url # Ceci utilise l'URL publique.
         print(f"✅ Téléversement GCS réussi. URL publique: {gcs_url}")
@@ -288,7 +288,7 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
 
 
 # ==============================================================================
-# 4. FONCTIONS DE PUBLICATION INSTAGRAM (inchangé)
+# 4. FONCTIONS DE PUBLICATION INSTAGRAM
 # ==============================================================================
 
 def get_instagram_business_id():
@@ -394,7 +394,7 @@ def publish_instagram_media(insta_id, media_url, caption, content_type):
 
 
 # ==============================================================================
-# 5. MAIN EXECUTION (inchangé)
+# 5. MAIN EXECUTION
 # ==============================================================================
 
 if __name__ == "__main__":
@@ -448,20 +448,3 @@ if __name__ == "__main__":
         publish_instagram_media(insta_business_id, final_media_url, caption, content_type)
     else:
         print("❌ Publication Instagram annulée car l'ID Business n'a pas pu être récupéré.")
-
----
-
-### 3. Action Manuelle Recommandée (Accès Public GCS)
-
-L'erreur UBLA signifie que vous ne pouvez pas rendre les objets publics via le code. Vous devez le faire via la console Google Cloud :
-
-1.  **Allez à la console Google Cloud Storage** et sélectionnez votre bucket (`media-auto-instagram`).
-2.  **Allez dans l'onglet "Permissions" (Autorisations).**
-3.  **Cliquez sur "Accorder l'accès" (Grant Access).**
-4.  Dans le champ **"Nouveaux membres" (New principals)**, tapez `allUsers`.
-5.  Dans le champ **"Rôle" (Role)**, sélectionnez `Cloud Storage` -> **`Lecteur des objets de l'espace de stockage` (Storage Object Viewer)**.
-6.  **Enregistrez (Save).**
-
-Ceci permettra à Meta (et à quiconque) de lire les fichiers que vous téléversez, ce qui est nécessaire pour que l'API Instagram fonctionne.
-
-Une fois que vous avez mis à jour votre code Python et, idéalement, corrigé les permissions GCS, relancez votre workflow.
