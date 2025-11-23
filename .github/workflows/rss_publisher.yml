@@ -2,7 +2,7 @@ name: Publish RSS to Instagram
 
 on:
   schedule:
-    # Exécute tous les jours à 8h00 UTC (à ajuster)
+    # Exécute tous les jours à 8h00 UTC
     - cron: '0 8 * * *'
   workflow_dispatch:
 
@@ -21,28 +21,37 @@ jobs:
 
       - name: Install dependencies and jq 🔧
         run: |
-          # Installation de jq, l'outil nécessaire pour nettoyer le secret JSON
+          # Installation de jq (pour la validation JSON) et les dépendances Python
           sudo apt-get update && sudo apt-get install -y jq
           
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run Python Script with Imagen Authentication FIX 🔑
-        # Cette étape garantit que le secret est un JSON propre pour l'ADC
+        # Cette étape résout le problème de formatage JSON (parse error)
         run: |
           echo "--- Préparation des identifiants Vertex AI (ADC) ---"
           
-          # 1. Nettoyer et créer le fichier JSON
-          # Utilisation de 'jq -r .' pour s'assurer que le secret est un JSON valide et sans guillemets ou espaces inutiles.
           CREDENTIALS_FILE="$GITHUB_WORKSPACE/gcp_sa_key.json"
-          echo "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" | jq -r '.' > $CREDENTIALS_FILE
           
-          # 2. Définir la variable d'environnement GOOGLE_APPLICATION_CREDENTIALS
+          # 1. Écrire le secret JSON multiligne dans le fichier.
+          # L'utilisation de 'cat <<EOF' est la méthode la plus fiable pour les clés multilignes
+          # car elle préserve la structure exacte du JSON, y compris les sauts de ligne.
+          cat > $CREDENTIALS_FILE <<EOF
+          ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
+          EOF
+          
+          # 2. Vérification de la validité JSON (le 'jq -e .' garantit que le fichier est valide)
+          echo "Vérification de la validité JSON..."
+          jq -e . $CREDENTIALS_FILE
+          
+          # 3. Définir la variable d'environnement GOOGLE_APPLICATION_CREDENTIALS
+          # C'est ce qui permet à la librairie google-cloud-aiplatform de s'authentifier
           export GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE
           
           echo "✅ Identifiants chargés pour l'API Google Cloud."
           
-          # 3. Exécuter le script
+          # 4. Exécuter le script
           python rss_publisher.py
         
         env:
