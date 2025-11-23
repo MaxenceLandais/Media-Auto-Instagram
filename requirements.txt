@@ -5,3 +5,4 @@ google-cloud-storage
 beautifulsoup4
 google-cloud-aiplatform # Nécessaire pour l'appel à Imagen
 Pillow                  # Nécessaire pour manipuler les données d'image
+google-generativeai
