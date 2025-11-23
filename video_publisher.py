@@ -25,9 +25,7 @@ def generate_ai_content_and_caption(topic):
     """Génère le texte (légende) et utilise une URL de vidéo de test."""
     
     # URL de Vidéo de Test Statique et Publique.
-    # IMPORTANT: Assurez-vous que cette vidéo est au format MP4 ou MOV et respecte les limites d'Instagram 
-    # (max 60 secondes pour un post standard, 1 minute pour le test de l'API).
-    # Nous utilisons une vidéo de démonstration stable et courte.
+    # Ceci est la même vidéo de test courte et stable.
     video_url = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" 
     
     # Générer la description (texte)
@@ -75,13 +73,14 @@ def publish_instagram_media(insta_id, video_url, caption):
     
     print("\n--- Début de la publication vidéo sur Instagram (Processus en 2 étapes) ---")
     
-    # 1. CRÉER LE CONTENEUR MÉDIA (Content Publishing Container)
+    # 1. CRÉER LE CONTENEUR MÉDIA
     print("Étape 1/2: Création du conteneur média...")
     media_container_url = f"{GRAPH_BASE_URL}/{insta_id}/media"
     
+    # *** CORRECTION MAJEURE: media_type doit être REELS ***
     container_payload = {
-        "media_type": "VIDEO",           # Spécifiez que c'est une vidéo
-        "video_url": video_url,          # Utiliser video_url au lieu de image_url
+        "media_type": "REELS",           
+        "video_url": video_url,          
         "caption": caption,
         "access_token": ACCESS_TOKEN
     }
