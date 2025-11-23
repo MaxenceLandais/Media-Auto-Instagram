@@ -10,12 +10,11 @@ from google import genai
 from google.genai.errors import APIError
 # Imports pour Imagen (Vertex AI)
 from google.cloud import aiplatform 
-from google.cloud.aiplatform.gapic.schema import predict
-from google.cloud.aiplatform.types import PredictRequest
 from bs4 import BeautifulSoup 
+import base64
 
 # ==============================================================================
-# 1. CONFIGURATION GLOBALE & SECRETS (Doit être configuré via GitHub Secrets)
+# 1. CONFIGURATION GLOBALE & SECRETS
 # ==============================================================================
 
 # Variables Meta (Instagram/Facebook)
@@ -26,15 +25,14 @@ GRAPH_BASE_URL = "https://graph.facebook.com/v19.0"
 # Variables Google Cloud Storage (GCS)
 GCS_SERVICE_ACCOUNT_KEY = os.getenv("GCS_SERVICE_ACCOUNT_KEY")
 GCS_BUCKET_NAME = "media-auto-instagram"
-# L'image de secours (si Imagen échoue)
 GCS_PLACEHOLDER_URL = "https://picsum.photos/1200/800" 
 
 # Variables Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Variables GCP/Vertex AI (Récupérées de vos captures d'écran)
+# Variables GCP/Vertex AI (Confirmées par vos captures)
 GCP_PROJECT_ID = "media-auto-instagram" 
-GCP_REGION = "us-central1" # Région standard pour Imagen
+GCP_REGION = "us-central1" 
 
 # Configuration RSS
 RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr" 
@@ -47,20 +45,16 @@ RSS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (
 def extract_media_url_from_entry(entry):
     """Essaie de trouver l'URL d'une image ou d'une vidéo dans une entrée RSS."""
     
-    # 1. Tenter l'extraction via la balise Media RSS
     if 'media_content' in entry:
         for media in entry.media_content:
             if 'url' in media and media.get('type', '').startswith(('image/', 'video/')):
                 print(f"   --> Média trouvé via media:content: {media.url}")
                 return media.url
-
-    # 2. Tenter l'extraction via les balises <img> dans le HTML (description ou summary)
+    
     content_html = entry.get('description', '') or entry.get('summary', '') or entry.get('content', [{}])[0].get('value', '')
     
     if content_html:
         soup = BeautifulSoup(content_html, 'html.parser')
-        
-        # Recherche de balises <img>
         img_tag = soup.find('img')
         if img_tag and img_tag.get('src'):
             print(f"   --> Image trouvée dans le contenu HTML: {img_tag['src']}")
@@ -89,7 +83,6 @@ def get_latest_rss_article():
                     self.link = link
                     self.media_url = media_url
             
-            # Tenter d'extraire le média
             media_url = extract_media_url_from_entry(article)
             
             return Article(article.title, article.link, media_url)
@@ -153,35 +146,33 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # 2. Appel à l'API Imagen (Vertex AI)
+    # 2. Appel à l'API Imagen (Vertex AI) - CORRIGÉ pour les imports
     print("\n--- 2. Appel à l'API Imagen (Vertex AI) ---")
     try:
-        # L'initialisation se base sur le service account GCS_SERVICE_ACCOUNT_KEY
         aiplatform.init(project=GCP_PROJECT_ID, location=GCP_REGION)
         
-        # Endpoint du modèle Imagen generation-005 (le modèle public recommandé)
-        endpoint = aiplatform.Endpoint(
-            endpoint_name=f"projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/endpoints/4828695036980643840"
-        )
-        
-        instance = predict.instance.TextToImagePredictionInstance(
-            prompt=image_prompt,
-            number_of_images=1,
-            sample_count=1
-        ).to_value()
-        
-        parameters = predict.params.TextToImagePredictionParameters(
-            aspect_ratio="1:1" # Format carré
-        ).to_value()
+        model_name = "imagegeneration@006" # Modèle stable et récent
+        model = aiplatform.Model.list(filter=f'display_name="{model_name}"')[0]
 
-        response_imagen = endpoint.predict(
-            instances=[instance],
+        # Les instances et les paramètres doivent être passés sous forme de dictionnaires
+        instances = [{
+            "prompt": image_prompt,
+            "number_of_images": 1,
+            "sample_count": 1 
+        }]
+        
+        parameters = {
+            "aspect_ratio": "1:1",
+            "negative_prompt": "text, bad quality, blurry, watermark"
+        }
+
+        response_imagen = model.predict(
+            instances=instances,
             parameters=parameters
         )
         
-        if response_imagen.predictions and response_imagen.predictions[0].image:
-            import base64
-            img_data_b64 = response_imagen.predictions[0].image.image_bytes
+        if response_imagen.predictions and response_imagen.predictions[0].get('image'):
+            img_data_b64 = response_imagen.predictions[0]['image']['image_bytes']
             
             image_binary = base64.b64decode(img_data_b64)
             content_type = 'image/jpeg' 
@@ -243,10 +234,6 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
         blob = bucket.blob(file_name)
         
         blob.upload_from_string(data, content_type=content_type)
-        
-        # Le bucket est en mode Uniforme (Uniform bucket-level access), 
-        # donc la permission est gérée par le rôle allUsers (Lecteur d'objets Storage) que vous avez configuré.
-        # Nous n'appelons pas make_public() qui échouerait.
         
         gcs_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{file_name}"
         print(f"✅ Téléversement GCS réussi. URL: {gcs_url}")
