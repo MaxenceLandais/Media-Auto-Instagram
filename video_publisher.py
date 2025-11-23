@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import time  # Nécessaire pour l'attente entre les étapes
+import time  
 from google import genai
 from google.genai.errors import APIError
 
@@ -23,10 +23,10 @@ POST_TOPICS = [
 # --- 2. Fonctions de Génération de Contenu ---
 
 def generate_ai_content_and_caption(topic):
-    """Génère le texte (légende) et utilise une URL de vidéo de test."""
+    """Génère le texte (légende) et utilise une URL de vidéo de test courte."""
     
-    # URL de Vidéo de Test Statique et Publique (MP4) pour validation.
-    video_url = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" 
+    # URL de Vidéo de Test ULTRA-COURTE (environ 5 secondes, MP4)
+    video_url = "https://test-videos.co.uk/vids/mp4/360/MP4-5s.mp4" 
     
     # Générer la description (texte)
     try:
@@ -69,11 +69,12 @@ def get_instagram_business_id():
         return None
 
 def check_media_status(creation_id, access_token):
-    """Vérifie l'état d'encodage du conteneur vidéo (boucle d'attente)."""
+    """Vérifie l'état d'encodage du conteneur vidéo (boucle d'attente prolongée)."""
     
     status_url = f"{GRAPH_BASE_URL}/{creation_id}?fields=status_code&access_token={access_token}"
     
-    max_checks = 12  # Vérifie pendant 60 secondes au maximum
+    # Augmentation de la limite d'attente à 3 minutes (36 * 5 secondes)
+    max_checks = 36  
     
     for i in range(max_checks):
         r = requests.get(status_url)
@@ -94,7 +95,7 @@ def check_media_status(creation_id, access_token):
         # Attendre 5 secondes avant la prochaine vérification
         time.sleep(5) 
         
-    print("   ❌ Délai d'attente dépassé (60 secondes). Annulation de la publication.")
+    print(f"   ❌ Délai d'attente dépassé ({max_checks * 5} secondes). Annulation de la publication.")
     return False
 
 
@@ -108,7 +109,7 @@ def publish_instagram_media(insta_id, video_url, caption):
     media_container_url = f"{GRAPH_BASE_URL}/{insta_id}/media"
     
     container_payload = {
-        "media_type": "REELS",           # CORRECTION: Type requis par Meta
+        "media_type": "REELS",           
         "video_url": video_url,          
         "caption": caption,
         "access_token": ACCESS_TOKEN
@@ -144,6 +145,7 @@ def publish_instagram_media(insta_id, video_url, caption):
     if r2.status_code == 200 and 'id' in data2:
         print("\n" + "="*50)
         print("✅ PUBLICATION VIDÉO INSTAGRAM DÉCLENCHÉE AVEC SUCCÈS !")
+        print("La vidéo devrait apparaître sur Instagram d'ici quelques instants.")
         print("==================================================")
         return True
     else:
