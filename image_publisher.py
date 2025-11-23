@@ -23,10 +23,10 @@ POST_TOPICS = [
 # --- 2. Fonctions de Génération de Contenu ---
 
 def generate_ai_content_and_caption(topic):
-    """Génère le texte (légende) et utilise une URL d'image statique et ultra-fiable."""
+    """Génère le texte (légende) et utilise votre URL GCS publique."""
     
-    # NOUVELLE URL D'IMAGE DE TEST (Source Unsplash, lien direct vers un JPEG)
-    image_url = "https://images.unsplash.com/photo-1621570776856-78b17208d08c" 
+    # URL GCS FOURNIE PAR L'UTILISATEUR (Doit être PUBLIC)
+    image_url = "https://storage.googleapis.com/media-auto-instagram/20200717_215732_insta.jpg" 
     
     # Générer la description (texte)
     try:
@@ -53,7 +53,7 @@ def generate_ai_content_and_caption(topic):
 def get_instagram_business_id():
     """Récupère l'ID du compte Instagram Business lié à la Page Facebook."""
     url = f"{GRAPH_BASE_URL}/{PAGE_ID}?fields=instagram_business_account&access_token={ACCESS_TOKEN}"
-    # ... (fonction inchangée) ...
+    
     try:
         r = requests.get(url)
         r.raise_for_status()
