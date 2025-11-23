@@ -8,10 +8,11 @@ import mimetypes
 import base64
 from bs4 import BeautifulSoup
 
-# --- NOUVEAUX IMPORTS POUR LA GÉNÉRATION D'IMAGES VIA VERTEX AI ---
+# --- NOUVEAUX IMPORTS POUR L'AUTHENTIFICATION ET VERTEX AI ---
 from google.cloud import aiplatform
 from google.cloud.aiplatform_v1beta1.services.prediction_service import PredictionServiceClient
-from google.cloud.aiplatform_v1beta1.types import Value # Utilisé pour le parsing
+from google.cloud.aiplatform_v1beta1.types import Value 
+from google.oauth2 import service_account # NOUVEL IMPORT pour l'authentification
 # --- FIN DES NOUVEAUX IMPORTS ---
 
 from google.cloud import storage
@@ -20,7 +21,7 @@ from google.genai.errors import APIError
 
 
 # ==============================================================================
-# 1. CONFIGURATION GLOBALE & SECRETS
+# 1. CONFIGURATION GLOBALE & SECRETS (inchangé)
 # ==============================================================================
 
 # Variables Meta (Instagram/Facebook)
@@ -38,14 +39,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Variables GCP/Vertex AI
 GCP_PROJECT_ID = "media-auto-instagram"
-GCP_REGION = "us-central1" # Région confirmée comme fonctionnelle
+GCP_REGION = "us-central1"
 
 # Configuration RSS
 RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr"
 RSS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 # ==============================================================================
-# 2. FONCTIONS D'ACQUISITION DE DONNÉES ET DE MÉDIA
+# 2. FONCTIONS D'ACQUISITION DE DONNÉES ET DE MÉDIA (inchangé)
 # ==============================================================================
 
 def extract_media_url_from_entry(entry):
@@ -128,7 +129,7 @@ def fetch_media_data(url):
 def generate_and_fetch_image_data(topic):
     """
     1. Génère le prompt via Gemini, en incluant la contrainte bleu/blanc/rouge.
-    2. Génère l'image via Vertex AI (PredictionServiceClient), qui est la méthode fonctionnelle.
+    2. Génère l'image via Vertex AI (PredictionServiceClient) en s'authentifiant explicitement.
     """
     
     # --- 1. Génération du prompt (via Gemini) ---
@@ -157,12 +158,19 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # --- 2. Appel à l'API Vertex AI (Génération d'images) ---
+    # --- 2. Appel à l'API Vertex AI (Génération d'images) via PredictionServiceClient ---
     print("\n--- 2. Appel à l'API Vertex AI (Génération d'images) via PredictionServiceClient ---")
     try:
+        # Décodage de la clé de service Base64 pour l'authentification explicite
+        key_json = base64.b64decode(GCS_SERVICE_ACCOUNT_KEY).decode('utf-8')
+        credentials_info = json.loads(key_json)
+        credentials = service_account.Credentials.from_service_account_info(credentials_info)
+        
         aiplatform.init(project=GCP_PROJECT_ID, location=GCP_REGION)
         client_options = {"api_endpoint": f"{GCP_REGION}-aiplatform.googleapis.com"}
-        client = PredictionServiceClient(client_options=client_options)
+        
+        # Le client est créé avec les identifiants explicites
+        client = PredictionServiceClient(client_options=client_options, credentials=credentials)
 
         instances_json = [{"prompt": image_prompt}]
         
@@ -258,7 +266,7 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
         key_json = base64.b64decode(GCS_SERVICE_ACCOUNT_KEY).decode('utf-8')
         credentials_info = json.loads(key_json)
         
-        # On utilise le JSON décodé pour l'authentification
+        # On utilise le JSON décodé pour l'authentification GCS
         client = storage.Client.from_service_account_info(credentials_info)
         
         bucket = client.bucket(GCS_BUCKET_NAME)
@@ -266,21 +274,21 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
         
         blob.upload_from_string(data, content_type=content_type)
         
-        # Rend le fichier lisible publiquement si nécessaire (bonne pratique pour Meta API)
-        # Note : Assurez-vous que les permissions IAM du bucket autorisent l'accès public
-        blob.make_public() 
+        # Ligne SUPPRIMÉE (blob.make_public()) : pour éviter l'erreur UBLA/ACL.
+        # L'accès public est maintenant géré uniquement par la configuration IAM du bucket.
         
-        gcs_url = blob.public_url
+        gcs_url = blob.public_url # Ceci utilise l'URL publique.
         print(f"✅ Téléversement GCS réussi. URL publique: {gcs_url}")
         return gcs_url
     
     except Exception as e:
         print(f"❌ Échec du téléversement GCS : {e}")
+        print("Piste: Si le code d'erreur HTTP est 400 (ACL/UBLA), assurez-vous que le rôle 'Storage Object Viewer' est donné à 'allUsers' au niveau du bucket.")
         return None
 
 
 # ==============================================================================
-# 4. FONCTIONS DE PUBLICATION INSTAGRAM
+# 4. FONCTIONS DE PUBLICATION INSTAGRAM (inchangé)
 # ==============================================================================
 
 def get_instagram_business_id():
@@ -386,12 +394,10 @@ def publish_instagram_media(insta_id, media_url, caption, content_type):
 
 
 # ==============================================================================
-# 5. MAIN EXECUTION
+# 5. MAIN EXECUTION (inchangé)
 # ==============================================================================
 
 if __name__ == "__main__":
-    # Correction : Le GCS_SERVICE_ACCOUNT_KEY est en Base64, mais le code de chargement GCS le gère.
-    # Vérifions que tous les secrets nécessaires sont présents.
     if not all([PAGE_ID, ACCESS_TOKEN, GEMINI_API_KEY, GCS_SERVICE_ACCOUNT_KEY]):
         print("Erreur : Les Secrets GitHub ne sont pas tous définis (FB, GEMINI, GCS KEY requis).")
         exit(1)
@@ -408,7 +414,6 @@ if __name__ == "__main__":
 
     # --- 2. LOGIQUE DE SÉLECTION DU MÉDIA (Priorité à la génération IA) ---
     
-    # Nouvelle priorité : générer l'image IA (fond bleu/blanc/rouge)
     print("\n--> Exécution de la génération d'image IA avec fond bleu/blanc/rouge.")
     media_data, file_extension, content_type = generate_and_fetch_image_data(topic)
 
@@ -443,3 +448,20 @@ if __name__ == "__main__":
         publish_instagram_media(insta_business_id, final_media_url, caption, content_type)
     else:
         print("❌ Publication Instagram annulée car l'ID Business n'a pas pu être récupéré.")
+
+---
+
+### 3. Action Manuelle Recommandée (Accès Public GCS)
+
+L'erreur UBLA signifie que vous ne pouvez pas rendre les objets publics via le code. Vous devez le faire via la console Google Cloud :
+
+1.  **Allez à la console Google Cloud Storage** et sélectionnez votre bucket (`media-auto-instagram`).
+2.  **Allez dans l'onglet "Permissions" (Autorisations).**
+3.  **Cliquez sur "Accorder l'accès" (Grant Access).**
+4.  Dans le champ **"Nouveaux membres" (New principals)**, tapez `allUsers`.
+5.  Dans le champ **"Rôle" (Role)**, sélectionnez `Cloud Storage` -> **`Lecteur des objets de l'espace de stockage` (Storage Object Viewer)**.
+6.  **Enregistrez (Save).**
+
+Ceci permettra à Meta (et à quiconque) de lire les fichiers que vous téléversez, ce qui est nécessaire pour que l'API Instagram fonctionne.
+
+Une fois que vous avez mis à jour votre code Python et, idéalement, corrigé les permissions GCS, relancez votre workflow.
