@@ -4,12 +4,20 @@ import json
 import time
 import feedparser
 import io
-import mimetypes 
+import mimetypes
+import base64
+from bs4 import BeautifulSoup
+
+# --- NOUVEAUX IMPORTS POUR LA GÉNÉRATION D'IMAGES VIA VERTEX AI ---
+from google.cloud import aiplatform
+from google.cloud.aiplatform_v1beta1.services.prediction_service import PredictionServiceClient
+from google.cloud.aiplatform_v1beta1.types import Value # Utilisé pour le parsing
+# --- FIN DES NOUVEAUX IMPORTS ---
+
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-from bs4 import BeautifulSoup 
-import base64
+
 
 # ==============================================================================
 # 1. CONFIGURATION GLOBALE & SECRETS
@@ -23,17 +31,17 @@ GRAPH_BASE_URL = "https://graph.facebook.com/v19.0"
 # Variables Google Cloud Storage (GCS)
 GCS_SERVICE_ACCOUNT_KEY = os.getenv("GCS_SERVICE_ACCOUNT_KEY")
 GCS_BUCKET_NAME = "media-auto-instagram"
-GCS_PLACEHOLDER_URL = "https://picsum.photos/1200/800" 
+GCS_PLACEHOLDER_URL = "https://picsum.photos/1200/800"
 
 # Variables Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Variables GCP/Vertex AI
-GCP_PROJECT_ID = "media-auto-instagram" 
-GCP_REGION = "us-central1" 
+GCP_PROJECT_ID = "media-auto-instagram"
+GCP_REGION = "us-central1" # Région confirmée comme fonctionnelle
 
 # Configuration RSS
-RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr" 
+RSS_FEED_URL = "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr"
 RSS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 # ==============================================================================
@@ -46,7 +54,7 @@ def extract_media_url_from_entry(entry):
     if 'media_content' in entry:
         for media in entry.media_content:
             if 'url' in media and media.get('type', '').startswith(('image/', 'video/')):
-                print(f"   --> Média trouvé via media:content: {media.url}")
+                print(f"    --> Média trouvé via media:content: {media.url}")
                 return media.url
     
     content_html = entry.get('description', '') or entry.get('summary', '') or entry.get('content', [{}])[0].get('value', '')
@@ -55,7 +63,7 @@ def extract_media_url_from_entry(entry):
         soup = BeautifulSoup(content_html, 'html.parser')
         img_tag = soup.find('img')
         if img_tag and img_tag.get('src'):
-            print(f"   --> Image trouvée dans le contenu HTML: {img_tag['src']}")
+            print(f"    --> Image trouvée dans le contenu HTML: {img_tag['src']}")
             return img_tag['src']
             
     return None
@@ -102,14 +110,14 @@ def fetch_media_data(url):
         content_type = r.headers.get('Content-Type', '').split(';')[0].strip()
         
         if not content_type.startswith(('image/', 'video/')):
-            print(f"   Avertissement : Type de contenu non supporté ({content_type}).")
+            print(f"    Avertissement : Type de contenu non supporté ({content_type}).")
             return None, None, None
 
         extension = mimetypes.guess_extension(content_type) or '.dat'
         
         return r.content, extension, content_type
     except Exception as e:
-        print(f"   ❌ Échec du téléchargement du média depuis {url} : {e}")
+        print(f"    ❌ Échec du téléchargement du média depuis {url} : {e}")
         return None, None, None
 
 
@@ -118,20 +126,25 @@ def fetch_media_data(url):
 # ==============================================================================
 
 def generate_and_fetch_image_data(topic):
-    """Génère le prompt via Gemini, puis génère l'image via Gemini (ImageGen)."""
+    """
+    1. Génère le prompt via Gemini, en incluant la contrainte bleu/blanc/rouge.
+    2. Génère l'image via Vertex AI (PredictionServiceClient), qui est la méthode fonctionnelle.
+    """
     
-    # 1. Génération du prompt (via Gemini)
+    # --- 1. Génération du prompt (via Gemini) ---
     if not GEMINI_API_KEY:
         print("❌ Erreur: GEMINI_API_KEY non configurée. Utilisation de l'image de secours.")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
         
-    print(f"--- 1. Génération du prompt IA pour Imagen : '{topic}' ---")
+    print(f"--- 1. Génération du prompt IA pour Vertex AI : '{topic}' ---")
     try:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         
         description_prompt = (
             f"Génère une description photo-réaliste, en une seule phrase, pour une image 1:1 "
-            f"illustrant le sujet : '{topic}'. L'image doit être symbolique, utiliser des couleurs dramatiques, et éviter le texte."
+            f"illustrant symboliquement le sujet : '{topic}'. L'image doit utiliser des couleurs dramatiques, "
+            f"éviter le texte, et IMPÉRATIVEMENT avoir un arrière-plan dominant de bleu, blanc et rouge. "
+            f"Style : Photographie de qualité professionnelle, composition percutante."
         )
         
         response_desc = gemini_client.models.generate_content(
@@ -144,43 +157,62 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # 2. Appel à l'API Gemini (Génération d'images) - NOUVELLE TENTATIVE
-    print("\n--- 2. Appel à l'API Gemini (Génération d'images) ---")
+    # --- 2. Appel à l'API Vertex AI (Génération d'images) ---
+    print("\n--- 2. Appel à l'API Vertex AI (Génération d'images) via PredictionServiceClient ---")
     try:
-        # Initialisation du client (déjà fait ci-dessus, mais bonne pratique de l'assurer)
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        
-        # Appel au modèle de génération d'images (Imagen 3.0 via l'API Gemini)
-        result = gemini_client.models.generate_images(
-            # Utilisation du nom de modèle complet pour être sûr
-            model='imagen-3.0-generate-002',
-            prompt=image_prompt,
-            config=dict(
-                number_of_images=1,
-                output_mime_type="image/jpeg",
-                aspect_ratio="1:1"
-            )
-        )
-        
-        if result.generated_images:
-            image_obj = result.generated_images[0].image
-            
-            # Conversion de l'objet Image en bytes JPEG
-            img_byte_arr = io.BytesIO()
-            image_obj.save(img_byte_arr, format='JPEG')
-            image_binary = img_byte_arr.getvalue() 
-            
-            content_type = 'image/jpeg' 
-            file_extension = '.jpeg'
-            
-            print("✅ Image générée par Gemini (ImageGen) !")
-            return image_binary, file_extension, content_type
+        aiplatform.init(project=GCP_PROJECT_ID, location=GCP_REGION)
+        client_options = {"api_endpoint": f"{GCP_REGION}-aiplatform.googleapis.com"}
+        client = PredictionServiceClient(client_options=client_options)
 
-        print("❌ Gemini n'a retourné aucune image. Repli sur le placeholder.")
+        instances_json = [{"prompt": image_prompt}]
+        
+        parameters_json = {
+            "sample_count": 1,
+            "width": 512,
+            "height": 512,
+        }
+
+        endpoint = f"projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/publishers/google/models/imagegeneration"
+
+        # Appel avec le timeout confirmé
+        response = client.predict(
+            endpoint=endpoint,
+            instances=instances_json,
+            parameters=parameters_json,
+            timeout=60.0
+        )
+
+        if response and response.predictions:
+            # Logique de parsing robuste (celle qui a fonctionné)
+            prediction_value_object = response.predictions[0]
+            prediction_dict = {}
+
+            if hasattr(prediction_value_object, 'struct_value'):
+                prediction_dict = prediction_value_object.struct_value
+            elif hasattr(prediction_value_object, 'fields'):
+                prediction_dict = {
+                    key: getattr(value, 'string_value', None) or
+                         getattr(value, 'number_value', None) or
+                         getattr(value, 'bool_value', None)
+                    for key, value in prediction_value_object.fields.items()
+                }
+            
+            if "bytesBase64Encoded" in prediction_dict:
+                image_binary = base64.b64decode(prediction_dict["bytesBase64Encoded"])
+                content_type = 'image/png' 
+                file_extension = '.png' 
+                
+                print("✅ Image générée par Vertex AI !")
+                return image_binary, file_extension, content_type
+            else:
+                print(f"❌ Vertex AI a retourné une réponse sans image. Contenu: {prediction_dict.get('error') or 'Inconnu'}")
+                return fetch_media_data(GCS_PLACEHOLDER_URL)
+
+        print("❌ Vertex AI n'a retourné aucune prédiction. Repli sur le placeholder.")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
             
     except Exception as e:
-        print(f"❌ Échec critique de l'appel à Gemini ImageGen. Erreur: {e}. Repli sur le placeholder.")
+        print(f"❌ Échec critique de l'appel à Vertex AI ImageGen. Erreur: {e}. Repli sur le placeholder.")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
 
 
@@ -222,7 +254,11 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
     print(f"--- Tentative de téléversement vers GCS: {file_name} ---")
     
     try:
-        credentials_info = json.loads(GCS_SERVICE_ACCOUNT_KEY)
+        # La clé Base64 est décodée pour obtenir le JSON du compte de service
+        key_json = base64.b64decode(GCS_SERVICE_ACCOUNT_KEY).decode('utf-8')
+        credentials_info = json.loads(key_json)
+        
+        # On utilise le JSON décodé pour l'authentification
         client = storage.Client.from_service_account_info(credentials_info)
         
         bucket = client.bucket(GCS_BUCKET_NAME)
@@ -230,8 +266,12 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
         
         blob.upload_from_string(data, content_type=content_type)
         
-        gcs_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{file_name}"
-        print(f"✅ Téléversement GCS réussi. URL: {gcs_url}")
+        # Rend le fichier lisible publiquement si nécessaire (bonne pratique pour Meta API)
+        # Note : Assurez-vous que les permissions IAM du bucket autorisent l'accès public
+        blob.make_public() 
+        
+        gcs_url = blob.public_url
+        print(f"✅ Téléversement GCS réussi. URL publique: {gcs_url}")
         return gcs_url
     
     except Exception as e:
@@ -246,9 +286,9 @@ def upload_to_gcs_and_get_url(data, file_name, content_type):
 def get_instagram_business_id():
     """Récupère l'ID du compte Instagram Business lié à la Page Facebook."""
     if not all([PAGE_ID, ACCESS_TOKEN]):
-         print("❌ Erreur: PAGE_ID ou ACCESS_TOKEN manquant pour l'API Meta.")
-         return None
-         
+          print("❌ Erreur: PAGE_ID ou ACCESS_TOKEN manquant pour l'API Meta.")
+          return None
+          
     url = f"{GRAPH_BASE_URL}/{PAGE_ID}?fields=instagram_business_account&access_token={ACCESS_TOKEN}"
     try:
         r = requests.get(url)
@@ -274,17 +314,17 @@ def check_media_status(creation_id, access_token):
         r = requests.get(status_url)
         data = r.json()
         status = data.get('status_code')
-        print(f"   [Vérification {i+1}/{max_checks}] Statut: {status}")
+        print(f"    [Vérification {i+1}/{max_checks}] Statut: {status}")
         
         if status == 'FINISHED':
             return True
         if status == 'ERROR':
-            print(f"   ❌ Erreur de traitement du conteneur {creation_id}. Détails: {json.dumps(data, indent=4)}")
+            print(f"    ❌ Erreur de traitement du conteneur {creation_id}. Détails: {json.dumps(data, indent=4)}")
             return False
             
         time.sleep(5) 
         
-    print(f"   ❌ Délai d'attente dépassé pour le conteneur {creation_id}.")
+    print(f"    ❌ Délai d'attente dépassé pour le conteneur {creation_id}.")
     return False
 
 def publish_instagram_media(insta_id, media_url, caption, content_type): 
@@ -307,7 +347,7 @@ def publish_instagram_media(insta_id, media_url, caption, content_type):
     
     if is_video:
         container_payload["video_url"] = media_url
-        container_payload["thumb_offset"] = 0 
+        container_payload["thumb_offset"] = 0
     else:
         container_payload["image_url"] = media_url
 
@@ -350,6 +390,8 @@ def publish_instagram_media(insta_id, media_url, caption, content_type):
 # ==============================================================================
 
 if __name__ == "__main__":
+    # Correction : Le GCS_SERVICE_ACCOUNT_KEY est en Base64, mais le code de chargement GCS le gère.
+    # Vérifions que tous les secrets nécessaires sont présents.
     if not all([PAGE_ID, ACCESS_TOKEN, GEMINI_API_KEY, GCS_SERVICE_ACCOUNT_KEY]):
         print("Erreur : Les Secrets GitHub ne sont pas tous définis (FB, GEMINI, GCS KEY requis).")
         exit(1)
@@ -364,19 +406,22 @@ if __name__ == "__main__":
     
     media_data, file_extension, content_type = None, None, None
 
-    # --- 2. LOGIQUE DE SÉLECTION DU MÉDIA (Priorité à Gemini ImageGen) ---
-    if article.media_url:
-        print(f"Tentative de récupération du média d'origine : {article.media_url}")
-        media_data, file_extension, content_type = fetch_media_data(article.media_url)
-        
-    if not media_data:
-        print("\n--> Média d'origine non trouvé ou téléchargement échoué. REPLI sur Gemini ImageGen.")
-        media_data, file_extension, content_type = generate_and_fetch_image_data(topic)
-
-    if not media_data:
-        print("❌ Abandon : Impossible d'obtenir des données média (origine ou IA).")
-        exit(1)
+    # --- 2. LOGIQUE DE SÉLECTION DU MÉDIA (Priorité à la génération IA) ---
     
+    # Nouvelle priorité : générer l'image IA (fond bleu/blanc/rouge)
+    print("\n--> Exécution de la génération d'image IA avec fond bleu/blanc/rouge.")
+    media_data, file_extension, content_type = generate_and_fetch_image_data(topic)
+
+    # Si l'IA échoue, on tente de récupérer le média de l'article (logique inversée)
+    if not media_data and article.media_url:
+         print("\n--> Génération IA échouée. REPLI sur le média d'origine.")
+         media_data, file_extension, content_type = fetch_media_data(article.media_url)
+    
+    # Si tout échoue, c'est l'étape generate_and_fetch_image_data qui retourne le placeholder
+    if not media_data:
+        print("❌ Abandon : Impossible d'obtenir des données média (IA, origine ou placeholder).")
+        exit(1)
+        
     # 3. PRÉPARATION ET TÉLÉVERSEMENT VERS GCS
     media_type_base = 'image' if content_type.startswith('image/') else 'video'
     file_name = f"rss_{media_type_base}_{int(time.time())}{file_extension}"
