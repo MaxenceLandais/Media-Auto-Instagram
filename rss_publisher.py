@@ -3,17 +3,12 @@ import requests
 import json
 import time
 import feedparser
-import io
+import io # Ajout/confirmation de l'import pour la gestion des données binaires d'image
 import mimetypes 
 from google.cloud import storage
 from google import genai
 from google.genai.errors import APIError
-# Imports pour Imagen (Vertex AI) - CORRIGÉS POUR ÉVITER ModuleNotFoundError
-from google.cloud import aiplatform 
-from google.cloud.aiplatform_v1.services.prediction_service import PredictionServiceClient
-from google.cloud.aiplatform_v1 import types # Utilise l'alias pour le module types
-from google.protobuf import json_format
-from google.protobuf.struct_pb2 import Value  # Import explicite pour les paramètres de requête
+# Suppression des imports Vertex AI (aiplatform, types, PredictRequest) pour plus de simplicité
 from bs4 import BeautifulSoup 
 import base64
 
@@ -34,7 +29,7 @@ GCS_PLACEHOLDER_URL = "https://picsum.photos/1200/800"
 # Variables Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Variables GCP/Vertex AI (Confirmées par vos captures)
+# Variables GCP/Vertex AI (Réduites, plus de besoin des imports aiplatform)
 GCP_PROJECT_ID = "media-auto-instagram" 
 GCP_REGION = "us-central1" 
 
@@ -124,7 +119,7 @@ def fetch_media_data(url):
 # ==============================================================================
 
 def generate_and_fetch_image_data(topic):
-    """Génère le prompt via Gemini, puis génère l'image via Imagen (Vertex AI)."""
+    """Génère le prompt via Gemini, puis génère l'image via Gemini (ImageGen)."""
     
     # 1. Génération du prompt (via Gemini)
     if not GEMINI_API_KEY:
@@ -150,59 +145,42 @@ def generate_and_fetch_image_data(topic):
         print(f"❌ Échec de la génération du prompt Gemini: {e}")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
     
-    # 2. Appel à l'API Imagen (Vertex AI)
-    print("\n--- 2. Appel à l'API Imagen (Vertex AI) ---")
+    # 2. Appel à l'API Gemini (Génération d'images) - REMPLACE L'APPEL VERTEX AI
+    print("\n--- 2. Appel à l'API Gemini (Génération d'images) ---")
     try:
-        aiplatform.init(project=GCP_PROJECT_ID, location=GCP_REGION)
+        # Initialisation du client (déjà fait ci-dessus, mais bonne pratique de l'assurer)
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         
-        # Le nom complet de l'endpoint public pour la génération d'images (Imagen 3.0)
-        endpoint_name = (
-            f"projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/publishers/google/models/imagen-3.0-generate-002"
+        # Appel au modèle de génération d'images (Imagen 3.0 via l'API Gemini)
+        result = gemini_client.models.generate_images(
+            model='imagen-3.0-generate-002',
+            prompt=image_prompt,
+            config=dict(
+                number_of_images=1,
+                output_mime_type="image/jpeg",
+                aspect_ratio="1:1"
+            )
         )
         
-        # Préparation du client et de la requête via le PredictionServiceClient
-        client_options = {"api_endpoint": f"{GCP_REGION}-aiplatform.googleapis.com"}
-        client = PredictionServiceClient(client_options=client_options)
-
-        # Les paramètres doivent être passés en JSON valide (via un dictionnaire)
-        parameters_dict = {
-            "aspectRatio": "1:1",
-            "number_of_images": 1,
-            "outputMimeType": "image/jpeg",
-            "negative_prompt": "text, bad quality, blurry, watermark, low resolution, ugly",
-        }
-        
-        # CORRECTION CLÉ : Convertit l'instance (prompt) en objet Protobuf Value
-        instance_struct = json_format.ParseDict({"prompt": image_prompt}, Value()) 
-
-        # Création de la requête. Utilise types.PredictRequest et Value
-        request = types.PredictRequest(
-            endpoint=endpoint_name,
-            instances=[instance_struct], # Utilise l'objet converti dans une liste
-            parameters=json_format.ParseDict(parameters_dict, Value()), 
-        )
-        
-        # Envoi de la requête
-        response_imagen = client.predict(request=request)
-        
-        # Traitement de la réponse
-        if response_imagen.predictions:
-            # L'image générée est contenue dans le champ 'bytesBase64'
-            img_data_b64 = response_imagen.predictions[0].get('bytesBase64')
+        if result.generated_images:
+            image_obj = result.generated_images[0].image
             
-            if img_data_b64:
-                image_binary = base64.b64decode(img_data_b64)
-                content_type = 'image/jpeg' 
-                file_extension = '.jpeg'
-                
-                print("✅ Image générée par Imagen (Vertex AI) !")
-                return image_binary, file_extension, content_type
+            # Conversion de l'objet Image en bytes JPEG
+            img_byte_arr = io.BytesIO()
+            image_obj.save(img_byte_arr, format='JPEG')
+            image_binary = img_byte_arr.getvalue() 
+            
+            content_type = 'image/jpeg' 
+            file_extension = '.jpeg'
+            
+            print("✅ Image générée par Gemini (ImageGen) !")
+            return image_binary, file_extension, content_type
 
-        print("❌ Imagen n'a retourné aucune image. Repli sur le placeholder.")
+        print("❌ Gemini n'a retourné aucune image. Repli sur le placeholder.")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
             
     except Exception as e:
-        print(f"❌ Échec critique de l'appel à Imagen. Erreur: {e}. Repli sur le placeholder.")
+        print(f"❌ Échec critique de l'appel à Gemini ImageGen. Erreur: {e}. Repli sur le placeholder.")
         return fetch_media_data(GCS_PLACEHOLDER_URL)
 
 
@@ -282,6 +260,7 @@ def get_instagram_business_id():
             print("❌ Erreur: Compte Instagram Business non trouvé lié à la Page Facebook.")
             return None
     except requests.exceptions.HTTPError as e:
+        # L'erreur 400 ou 403 est généralement un problème de jeton ou de permissions
         print(f"❌ Échec de la requête d'ID Instagram (HTTP): {e}")
         return None
     except Exception as e:
@@ -386,13 +365,13 @@ if __name__ == "__main__":
     
     media_data, file_extension, content_type = None, None, None
 
-    # --- 2. LOGIQUE DE SÉLECTION DU MÉDIA (Priorité à Imagen) ---
+    # --- 2. LOGIQUE DE SÉLECTION DU MÉDIA (Priorité à Gemini ImageGen) ---
     if article.media_url:
         print(f"Tentative de récupération du média d'origine : {article.media_url}")
         media_data, file_extension, content_type = fetch_media_data(article.media_url)
         
     if not media_data:
-        print("\n--> Média d'origine non trouvé ou téléchargement échoué. REPLI sur Imagen.")
+        print("\n--> Média d'origine non trouvé ou téléchargement échoué. REPLI sur Gemini ImageGen.")
         media_data, file_extension, content_type = generate_and_fetch_image_data(topic)
 
     if not media_data:
