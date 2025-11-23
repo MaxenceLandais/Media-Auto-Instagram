@@ -46,11 +46,12 @@ def generate_image_with_vertex_ai(
 
         print(f"Tentative de génération de {num_images} image(s) ({image_width}x{image_height}) avec le prompt: '{prompt}' via l'endpoint '{endpoint}'...")
 
-        # Appel à l'API de prédiction
+        # Appel à l'API de prédiction AVEC UN TIMEOUT PLUS LONG
         response = client.predict(
             endpoint=endpoint,
             instances=instances_json,
-            parameters=parameters_json
+            parameters=parameters_json,
+            timeout=60.0 # <--- AJOUT DU TIMEOUT ICI (60 secondes)
         )
 
         # Création du répertoire de sortie si nécessaire
@@ -82,15 +83,16 @@ def generate_image_with_vertex_ai(
     except Exception as e:
         print(f"ERREUR: Une erreur est survenue lors de la génération d'images: {e}")
         print("\nPoints à vérifier impérativement:")
-        print("1. **Permissions:** Le compte de service ('media-upload-key') doit avoir le rôle 'Utilisateur Vertex AI' (ou 'Generative AI User'). (Confirmé)")
+        print("1. **Permissions:** Le compte de service ('media-upload-key') doit avoir les rôles nécessaires (Administrateur Vertex AI). (Confirmé)")
         print("2. **Authentification:** La variable d'environnement GOOGLE_APPLICATION_CREDENTIALS doit être correctement définie et pointer vers la clé JSON. (Confirmé)")
         print("3. **Nom du Modèle:** 'imagegeneration' est le nom correct pour le modèle de Google Publisher.")
-        print("4. **Région:** 'us-central1' doit être utilisée et le modèle doit y être disponible.")
-        print("5. **Quotas:** Vérifiez les quotas pour l'API de génération d'images dans votre projet GCP.")
+        print("4. **Région:** 'us-central1' doit être utilisée et le modèle doit y être disponible. (Confirmé)")
+        print("5. **Quotas:** Vérifiez les quotas pour l'API de génération d'images dans votre projet GCP. (Confirmé que le quota est bon)")
+        print("6. **Logs Vertex AI:** Consultez l'explorateur de journaux pour des messages d'erreur plus détaillés côté serveur.")
 
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
-    LOCATION = "us-central1"  # NOUVEAU CHANGEMENT/ALIGNEMENT !
+    LOCATION = "us-central1"
     my_prompt = "Un petit chaton joueur sur une pelouse ensoleillée, style dessin animé."
 
     generate_image_with_vertex_ai(
