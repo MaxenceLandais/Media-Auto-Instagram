@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import time # Gardons-le, même si moins critique pour les images, pour la robustesse.
+import time 
 from google import genai
 from google.genai.errors import APIError
 
@@ -25,8 +25,8 @@ POST_TOPICS = [
 def generate_ai_content_and_caption(topic):
     """Génère le texte (légende) et utilise une URL d'image statique et fiable."""
     
-    # URL d'image de test statique ultra-fiable (1:1), connue pour bien passer.
-    image_url = "https://picsum.photos/id/400/1080/1080.jpg" 
+    # NOUVELLE URL (Source Wikimedia Commons - très fiable pour les tests API)
+    image_url = "https://upload.wikimedia.org/wikipedia/commons/4/4e/A_random_picture_of_the_planet_Earth_from_space.jpg" 
     
     # Générer la description (texte)
     try:
@@ -53,7 +53,7 @@ def generate_ai_content_and_caption(topic):
 def get_instagram_business_id():
     """Récupère l'ID du compte Instagram Business lié à la Page Facebook."""
     url = f"{GRAPH_BASE_URL}/{PAGE_ID}?fields=instagram_business_account&access_token={ACCESS_TOKEN}"
-    
+    # ... (fonction inchangée) ...
     try:
         r = requests.get(url)
         r.raise_for_status()
@@ -69,7 +69,7 @@ def get_instagram_business_id():
         return None
 
 def check_media_status(creation_id, access_token):
-    """Vérifie l'état de traitement du conteneur (moins critique pour image, mais bonne pratique)."""
+    """Vérifie l'état de traitement du conteneur."""
     
     status_url = f"{GRAPH_BASE_URL}/{creation_id}?fields=status_code&access_token={access_token}"
     
@@ -107,8 +107,8 @@ def publish_instagram_image(insta_id, image_url, caption):
     media_container_url = f"{GRAPH_BASE_URL}/{insta_id}/media"
     
     container_payload = {
-        "media_type": "IMAGE",           # Type spécifique pour une image
-        "image_url": image_url,          # Utiliser image_url
+        "media_type": "IMAGE",           
+        "image_url": image_url,          
         "caption": caption,
         "access_token": ACCESS_TOKEN
     }
@@ -124,7 +124,7 @@ def publish_instagram_image(insta_id, image_url, caption):
     creation_id = data1['id']
     print(f"✅ Conteneur image créé avec ID: {creation_id}")
     
-    # VÉRIFICATION DE L'ÉTAT DU CONTENEUR (même pour les images, bonne pratique)
+    # VÉRIFICATION DE L'ÉTAT DU CONTENEUR
     if not check_media_status(creation_id, ACCESS_TOKEN):
         return False
     
@@ -143,7 +143,6 @@ def publish_instagram_image(insta_id, image_url, caption):
     if r2.status_code == 200 and 'id' in data2:
         print("\n" + "="*50)
         print("✅ PUBLICATION IMAGE INSTAGRAM DÉCLENCHÉE AVEC SUCCÈS !")
-        print("L'image devrait apparaître sur Instagram d'ici quelques instants.")
         print("==================================================")
         return True
     else:
