@@ -1,0 +1,63 @@
+name: Generate Image with Vertex AI
+
+# Déclenche le workflow manuellement (bouton 'Run workflow' sur GitHub)
+on:
+  workflow_dispatch:
+  # Décommenter si vous voulez que ça tourne automatiquement (ex: tous les jours à 0h00 UTC)
+  # schedule:
+  #   - cron: '0 0 * * *'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    
+    # Permission requise pour que le bot GitHub puisse commiter les images générées
+    permissions:
+      contents: write 
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install google-cloud-aiplatform
+
+    - name: Set up Google Cloud Authentication (Decoding Secret)
+      id: 'auth'
+      # Cette étape utilise votre Secret GCS_SERVICE_ACCOUNT_KEY pour authentifier l'API
+      run: |
+        # Crée un fichier temporaire pour la clé JSON. La clé DOIT être encodée en base64.
+        # Attention: Le secret doit être encodé en base64 pour éviter les problèmes de caractères.
+        echo "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" | base64 -d > gcp_sa_key.json
+        
+        # Exporte le chemin vers ce fichier pour que le script Python l'utilise
+        echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_sa_key.json" >> $GITHUB_ENV
+        
+    - name: Run Image Generation Script
+      run: python generate_image.py
+
+    - name: Commit and Push Generated Images (Optional)
+      # Cette étape est optionnelle mais essentielle si vous voulez que les images apparaissent sur GitHub
+      if: always()
+      run: |
+        # Configure le bot pour commiter
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        
+        # Ajoute les nouvelles images PNG générées
+        git add generated_images/*.png
+        
+        # Vérifie s'il y a de nouvelles images à commiter avant de le faire
+        if git diff --cached --quiet; then
+          echo "No new images to commit."
+        else
+          git commit -m "chore: Add newly generated images from Vertex AI workflow"
+          git push
+        fi
