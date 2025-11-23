@@ -1,0 +1,36 @@
+name: 📸 Publication Quotidienne sur Instagram (Vidéo)
+
+on:
+  # Permet le déclenchement manuel
+  workflow_dispatch:
+
+  # Déclenchement automatique (par exemple, tous les jours à 12h00 UTC)
+  schedule:
+    - cron: '0 12 * * *' 
+
+jobs:
+  publish_instagram_video:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: ⬇️ Checkout du code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configuration de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 📦 Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests google-genai
+
+      - name: 🚀 Exécution du script de publication vidéo Instagram
+        # Appelle le script dédié à la publication vidéo
+        run: python video_publisher.py
+        env:
+          # Les variables d'environnement sont passées depuis vos Secrets GitHub
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
