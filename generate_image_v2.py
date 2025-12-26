@@ -1,32 +1,50 @@
+import base64
+import os
+import datetime
 import vertexai
 from vertexai.preview.vision_models import ImageGenerationModel
 
-def generate_image_v3(project_id, location, prompt, bucket_name):
+def generate_image_locally(
+    project_id: str,
+    location: str,
+    prompt: str,
+    model_name: str = "imagegeneration@006",
+    output_dir: str = "generated_images"
+):
+    """
+    Génère une image avec Imagen 3 et la sauvegarde localement.
+    """
     try:
-        # Initialisation du SDK Vertex AI
+        # Initialisation du SDK
         vertexai.init(project=project_id, location=location)
+        model = ImageGenerationModel.from_pretrained(model_name)
+
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            print(f"Dossier '{output_dir}' créé.")
+
+        print(f"--- GÉNÉRATION IMAGEN 3 (Local) ---")
         
-        # Chargement du modèle Imagen 3
-        model = ImageGenerationModel.from_pretrained("imagegeneration@006")
-        
-        print(f"--- GÉNÉRATION IMAGEN 3 VERS GCS ---")
-        
-        # Génération de l'image
-        # Note: Imagen 3 gère nativement le ratio 4:5 via aspect_ratio
-        images = model.generate_images(
+        # On ne précise PAS de storage_uri pour recevoir le Base64
+        response = model.generate_images(
             prompt=prompt,
             number_of_images=1,
-            aspect_ratio="4:5",
-            storage_uri=f"gs://{bucket_name}/"
+            aspect_ratio="4:5"
         )
-        
-        # Avec storage_uri, 'images' contient les objets générés et sauvés sur GCS
-        if images:
-            print(f"✅ SUCCÈS : Image générée et stockée sur GCS.")
-            for img in images:
-                print(f"Fichier : {img._gcs_uri if hasattr(img, '_gcs_uri') else 'Vérifiez votre bucket'}")
+
+        if response and response[0]:
+            # Imagen 3 via le SDK vertexai permet d'accéder directement aux images
+            img = response[0]
+            
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(output_dir, f"insta_post_{timestamp}.png")
+
+            # Sauvegarde directe via la méthode intégrée au SDK
+            img.save(location=filename, include_generation_parameters=False)
+            
+            print(f"✅ SUCCÈS : Image sauvegardée sous {filename}")
         else:
-            print("❌ Erreur : Aucune image n'a été retournée.")
+            print("❌ Erreur : Aucune image générée.")
 
     except Exception as e:
         print(f"❌ ERREUR : {e}")
@@ -34,12 +52,14 @@ def generate_image_v3(project_id, location, prompt, bucket_name):
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1"
-    BUCKET_NAME = "media-auto-instagram"
     
-    PROMPT = """Photorealistic portrait of a woman leaning against a dark wooden bedpost, 
-    right arm raised holding the post. She is wearing a black lace loungewear set with a crop top, 
-    matching shorts and an open sheer floral robe. Environment is a bright bedroom with cream 
-    louvered wardrobe doors and a white bed. Soft natural lighting, 85mm lens, f/2.8, 
-    elegant lifestyle mood, 8k resolution, sharp focus."""
+    # Prompt simplifié pour une meilleure compréhension par l'IA
+    my_prompt = """Photorealistic portrait of a woman leaning against a dark wooden bedpost, 
+    right arm raised holding the post. Black lace loungewear, bright bedroom, soft natural lighting, 
+    85mm lens, elegant lifestyle mood, sharp focus."""
 
-    generate_image_v3(PROJECT_ID, LOCATION, PROMPT, BUCKET_NAME)
+    generate_image_locally(
+        project_id=PROJECT_ID,
+        location=LOCATION,
+        prompt=my_prompt
+    )
