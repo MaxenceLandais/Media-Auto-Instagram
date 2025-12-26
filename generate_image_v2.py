@@ -11,6 +11,7 @@ def generate_image_locally(
     output_dir: str = "generated_images"
 ):
     try:
+        # Initialisation
         vertexai.init(project=project_id, location=location)
         model = ImageGenerationModel.from_pretrained(model_name)
 
@@ -18,14 +19,13 @@ def generate_image_locally(
             os.makedirs(output_dir)
 
         print(f"--- GÉNÉRATION IMAGEN 3 (Local) ---")
+        print(f"Ratio choisi : 9:16 (Format Story/Vertical)")
         
-        # On remplace aspect_ratio par width et height explicites
-        # 896x1120 correspond exactement au ratio 4:5
+        # On utilise le ratio 9:16 qui est supporté officiellement
         response = model.generate_images(
             prompt=prompt,
             number_of_images=1,
-            width=896,
-            height=1120
+            aspect_ratio="9:16"
         )
 
         if response and response[0]:
@@ -33,10 +33,11 @@ def generate_image_locally(
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = os.path.join(output_dir, f"insta_post_{timestamp}.png")
 
+            # Sauvegarde
             img.save(location=filename, include_generation_parameters=False)
             print(f"✅ SUCCÈS : Image sauvegardée sous {filename}")
         else:
-            print("❌ Erreur : Aucune image générée.")
+            print("❌ Erreur : L'API n'a pas retourné d'image.")
 
     except Exception as e:
         print(f"❌ ERREUR : {e}")
