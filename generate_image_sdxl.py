@@ -3,42 +3,56 @@ import datetime
 import requests
 import time
 import urllib.parse
+from PIL import Image, ImageFilter
 
 OUTPUT_DIR = "generated_images"
 
-def generate_clean_image(prompt_text):
-    print(f"🚀 Génération d'une image lisse et nette...")
+def apply_anti_grain(filename):
+    """Applique un filtre de lissage léger pour supprimer le grain IA"""
+    try:
+        with Image.open(filename) as img:
+            # Filtre de lissage pour enlever le bruit numérique
+            img_smooth = img.filter(ImageFilter.SMOOTH_MORE)
+            # On peut aussi ajuster la netteté pour garder les détails
+            img_final = img_smooth.filter(ImageFilter.SHARPEN)
+            img_final.save(filename, quality=95)
+            print(f"✨ Post-traitement terminé : Grain supprimé sur {filename}")
+    except Exception as e:
+        print(f"⚠️ Impossible de traiter l'image : {e}")
+
+def generate_fast_and_clean(prompt_text):
+    print(f"🚀 Génération optimisée (Vitesse + Lissage local)...")
     
-    # Prompt de nettoyage : on insiste sur une peau lisse et une image propre
-    clean_directives = "ultra-sharp focus, smooth skin, clean textures, high gloss, professional lighting, 8k resolution, no grain, no noise, high-quality digital rendering, "
-    full_prompt = clean_directives + prompt_text
-    
+    # Prompt conçu pour être simple à générer pour le serveur
+    full_prompt = f"digital photography, high resolution, smooth skin, clear lighting, {prompt_text}"
     encoded_prompt = urllib.parse.quote(full_prompt)
     
-    # Paramètres techniques :
-    # model=pro (souvent plus stable et propre sur Pollinations)
-    # enhance=true (aide à lisser les détails)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1344&nologo=true&model=pro&enhance=true&seed={int(time.time())}"
+    # On utilise un modèle plus rapide pour éviter le Timeout
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1344&nologo=true&seed={int(time.time())}"
 
     try:
-        response = requests.get(url, timeout=120)
+        # Timeout réduit à 60s car on veut une réponse rapide
+        response = requests.get(url, timeout=60)
+        
         if response.status_code == 200:
             if not os.path.exists(OUTPUT_DIR):
                 os.makedirs(OUTPUT_DIR)
                 
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(OUTPUT_DIR, f"insta_clean_{timestamp}.png")
+            filename = os.path.join(OUTPUT_DIR, f"insta_smooth_{timestamp}.png")
             
             with open(filename, "wb") as f:
                 f.write(response.content)
-            print(f"✅ SUCCÈS : Image nette sauvegardée dans {filename}")
+            
+            print(f"✅ Image téléchargée.")
+            # Application du filtre anti-grain localement
+            apply_anti_grain(filename)
+            
         else:
-            print(f"⚠️ Erreur serveur {response.status_code}")
+            print(f"⚠️ Erreur serveur : {response.status_code}")
     except Exception as e:
-        print(f"❌ Erreur : {e}")
+        print(f"❌ Erreur réseau ou Timeout : {e}. Le serveur est surchargé, réessayez dans 5 min.")
 
 if __name__ == "__main__":
-    # On évite 'candid' ou 'tousled' qui peuvent amener du désordre visuel
-    my_prompt = "Portrait of a beautiful woman, dark hair, white tank top, red bikini, luxury yacht background, sunset, realistic skin, hyper-detailed, clean sharp lines"
-    
-    generate_clean_image(my_prompt)
+    my_prompt = "Woman with dark hair, white tank top, red bikini, luxury yacht, sunset background, cinematic"
+    generate_fast_and_clean(my_prompt)
