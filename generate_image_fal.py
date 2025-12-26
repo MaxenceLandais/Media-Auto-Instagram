@@ -1,53 +1,64 @@
 import os
 import datetime
-import fal_client # La nouvelle bibliothèque
 import requests
+import fal_client
 
+# Configuration du dossier de sortie
 OUTPUT_DIR = "generated_images"
 
-def generate_flux_image(prompt_text):
-    print(f"🚀 Génération Pro avec FLUX.1 [dev] via Fal.ai...")
+def generate_pro_image():
+    # RÉCUPÉRATION DE LA CLÉ : Très important pour GitHub Actions
+    # Le script va chercher la variable d'environnement FAL_KEY définie dans le YAML
+    fal_key = os.getenv("FAL_KEY")
+    if not fal_key:
+        print("❌ Erreur : FAL_KEY manquante. Vérifiez vos Secrets GitHub.")
+        return
+
+    print(f"🚀 Connexion à Fal.ai (Modèle Flux.1 Dev)...")
     
-    # On définit les paramètres de haute qualité
-    # Plus besoin de '8k' ou 'masterpiece', le modèle est déjà entraîné pour ça
-    arguments = {
-        "prompt": prompt_text,
-        "image_size": "portrait_4_5", # Format idéal pour Instagram
-        "num_inference_steps": 28,     # Équilibre parfait entre vitesse et détail
-        "guidance_scale": 3.5,
-        "enable_safety_checker": True
-    }
+    # Prompt optimisé pour le style "Maria Rubtsova"
+    prompt = """
+    High-end fashion photography, young woman with dark hair, 
+    wearing a white tank top and red bikini, 
+    standing on a luxury yacht deck, ocean background. 
+    Sunset lighting, ultra-realistic skin texture, 8k resolution, 
+    sharp focus, cinematic composition, professional color grading.
+    """
 
     try:
-        # Appel à l'API Fal
-        result = fal_client.subscribe("fal-ai/flux/dev", arguments=arguments)
-        
+        # Envoi de la requête à Fal.ai
+        result = fal_client.subscribe(
+            "fal-ai/flux/dev",
+            arguments={
+                "prompt": prompt,
+                "image_size": "portrait_4_5",
+                "num_inference_steps": 28,
+                "guidance_scale": 3.5,
+                "enable_safety_checker": True
+            },
+        )
+
         image_url = result['images'][0]['url']
-        
-        # Téléchargement de l'image finale
+        print(f"🔗 Image générée avec succès. Téléchargement...")
+
+        # Téléchargement et sauvegarde
         response = requests.get(image_url)
         if response.status_code == 200:
             if not os.path.exists(OUTPUT_DIR):
                 os.makedirs(OUTPUT_DIR)
-                
+
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(OUTPUT_DIR, f"insta_flux_{timestamp}.png")
-            
+            filename = os.path.join(OUTPUT_DIR, f"flux_pro_{timestamp}.png")
+
             with open(filename, "wb") as f:
                 f.write(response.content)
-            print(f"✅ SUCCÈS : Image Pro sauvegardée dans {filename}")
-        
+            
+            print(f"✅ IMAGE SAUVEGARDÉE : {filename}")
+        else:
+            print(f"⚠️ Échec du téléchargement (Code: {response.status_code})")
+
     except Exception as e:
-        print(f"❌ Erreur avec Fal.ai : {e}")
+        print(f"❌ Erreur lors de la génération : {e}")
 
 if __name__ == "__main__":
-    # Prompt de haut niveau (style Maria Rubtsova)
-    my_prompt = """
-    Cinematic fashion photography of a young woman with dark hair, 
-    wearing a high-quality white tank top and red bikini, 
-    standing on a luxury yacht deck at sunset. 
-    Golden hour lighting, soft shadows, realistic skin texture (pores visible), 
-    sharp focus on eyes, 35mm lens, high-end commercial aesthetic.
-    """
-    
-    generate_flux_image(my_prompt)
+    generate_pro_image()
