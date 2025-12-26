@@ -6,24 +6,20 @@ import urllib.parse
 
 OUTPUT_DIR = "generated_images"
 
-def generate_high_quality_image(prompt_text):
-    print(f"🚀 Génération Haute Qualité (Modèle Flux)...")
+def generate_stable_image(prompt_text):
+    print(f"🚀 Génération en mode Haute Stabilité...")
     
-    # On ajoute des directives techniques pour la qualité 8K et l'anatomie
-    quality_header = "(photorealistic:1.3), (highly detailed skin texture:1.2), masterpiece, 8k uhd, sharp focus, perfect anatomy, "
-    full_prompt = quality_header + prompt_text
-    
-    # Encodage du prompt
+    # On garde un prompt très qualitatif
+    full_prompt = f"professional 8k portrait, highly detailed, sharp focus, {prompt_text}"
     encoded_prompt = urllib.parse.quote(full_prompt)
     
-    # URL avec les paramètres : 
-    # model=flux (Précision maximale)
-    # enhance=true (Augmente le nombre de calculs pour les détails)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1344&nologo=true&model=flux&enhance=true&seed={int(time.time())}"
+    # URL simplifiée au maximum pour éviter la 404
+    # On retire "model=flux" qui cause l'erreur 404 actuellement
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1344&nologo=true&seed={int(time.time())}"
 
     for i in range(3):
         try:
-            print(f"🔄 Tentative {i+1}/3 - Calcul des détails en cours...")
+            print(f"🔄 Tentative {i+1}/3...")
             response = requests.get(url, timeout=120)
             
             if response.status_code == 200:
@@ -31,26 +27,19 @@ def generate_high_quality_image(prompt_text):
                     os.makedirs(OUTPUT_DIR)
                     
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = os.path.join(OUTPUT_DIR, f"insta_premium_{timestamp}.png")
+                filename = os.path.join(OUTPUT_DIR, f"insta_final_{timestamp}.png")
                 
                 with open(filename, "wb") as f:
                     f.write(response.content)
-                print(f"✅ SUCCÈS : Image Haute Qualité sauvegardée dans {filename}")
+                print(f"✅ SUCCÈS : Image sauvegardée dans {filename}")
                 return
             else:
-                print(f"⚠️ Erreur {response.status_code}, nouvelle tentative...")
+                print(f"⚠️ Erreur {response.status_code}. Le serveur est peut-être saturé.")
                 time.sleep(10)
         except Exception as e:
-            print(f"❌ Erreur : {e}")
+            print(f"❌ Erreur réseau : {e}")
             time.sleep(10)
 
 if __name__ == "__main__":
-    # Prompt ultra-détaillé pour éviter les membres déformés
-    my_prompt = """
-    Young woman with dark hair, white tank top, red bikini, 
-    standing on a luxury yacht deck, leaning on railing, 
-    full body shot, cinematic lighting, sunset glow, 
-    detailed hands, straight legs, 35mm lens, f/1.8
-    """
-    
-    generate_high_quality_image(my_prompt)
+    my_prompt = "young woman, dark hair, white tank top, red bikini, luxury yacht, sunset, cinematic"
+    generate_stable_image(my_prompt)
