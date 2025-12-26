@@ -46,6 +46,13 @@ def generate_image_pollinations(prompt_text):
 
 if __name__ == "__main__":
     # Prompt optimisé (plus direct pour éviter les erreurs d'encodage)
-    my_prompt = "High-end fashion photography, young woman with dark hair, white tank top, red bikini, on luxury yacht deck, bright sunlight, cinematic lighting, 8k"
-    
+    my_prompt = """
+(masterpiece, realistic photography, 8k, highly detailed), 
+A young woman with dark hair standing on a luxury yacht deck, 
+wearing a white tank top and red bikini, 
+leaning against a railing, 
+perfect anatomy, straight legs, highly detailed hands, 
+bright sunlight, clear sea background, 
+cinematic lighting, sharp focus
+"""
     generate_image_pollinations(my_prompt)
