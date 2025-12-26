@@ -1,38 +1,51 @@
 import os
 import datetime
 import requests
-import urllib.parse
+import time
 
 OUTPUT_DIR = "generated_images"
 
 def generate_image_pollinations(prompt_text):
-    print(f"🚀 Génération via Pollinations (SDXL)...")
+    print(f"🚀 Génération via Pollinations (Mode Robuste)...")
     
-    # Nettoyage et encodage du prompt pour l'URL
-    encoded_prompt = urllib.parse.quote(prompt_text)
+    # On utilise un prompt plus court pour accélérer le traitement initial
+    clean_prompt = prompt_text.replace("\n", " ").strip()
     
-    # Paramètres : Largeur 768, Hauteur 1344 (Format 9:16), Modèle flux (très réaliste)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1344&nologo=true&model=flux"
+    # URL simplifiée (modèle par défaut pour plus de rapidité)
+    url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(clean_prompt)}?width=768&height=1344&nologo=true&seed={int(time.time())}"
 
-    try:
-        response = requests.get(url, timeout=60)
-        if response.status_code == 200:
-            if not os.path.exists(OUTPUT_DIR):
-                os.makedirs(OUTPUT_DIR)
-                
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(OUTPUT_DIR, f"insta_pollination_{timestamp}.png")
+    # Tentatives multiples (3 essais)
+    for i in range(3):
+        try:
+            print(f"🔄 Tentative {i+1}/3 (Délai d'attente : 120s)...")
+            # timeout=120 permet de laisser plus de temps au serveur pour répondre
+            response = requests.get(url, timeout=120)
             
-            with open(filename, "wb") as f:
-                f.write(response.content)
-            print(f"✅ SUCCÈS : Image générée dans {filename}")
-        else:
-            print(f"❌ Échec : Code erreur {response.status_code}")
-    except Exception as e:
-        print(f"❌ Erreur réseau : {e}")
+            if response.status_code == 200:
+                if not os.path.exists(OUTPUT_DIR):
+                    os.makedirs(OUTPUT_DIR)
+                    
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = os.path.join(OUTPUT_DIR, f"insta_post_{timestamp}.png")
+                
+                with open(filename, "wb") as f:
+                    f.write(response.content)
+                print(f"✅ SUCCÈS : Image générée dans {filename}")
+                return # On sort de la fonction si ça a marché
+            else:
+                print(f"⚠️ Erreur serveur {response.status_code}, nouvelle tentative dans 10s...")
+                time.sleep(10)
+                
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Erreur réseau lors de la tentative {i+1} : {e}")
+            if i < 2:
+                print("⏳ Attente de 15s avant le prochain essai...")
+                time.sleep(15)
+            else:
+                print("💀 Échec définitif après 3 tentatives.")
 
 if __name__ == "__main__":
-    # Ton prompt de mode luxe
-    my_prompt = "A candid high-end fashion photograph of a young woman with tousled dark hair, wearing a white tank top and red bikini, leaning against the railing on the deck of a luxury yacht, bright sunlight, cinematic lighting, 8k resolution"
+    # Prompt optimisé (plus direct pour éviter les erreurs d'encodage)
+    my_prompt = "High-end fashion photography, young woman with dark hair, white tank top, red bikini, on luxury yacht deck, bright sunlight, cinematic lighting, 8k"
     
     generate_image_pollinations(my_prompt)
