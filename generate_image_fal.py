@@ -16,7 +16,7 @@ def generate_pro_image():
     
     # Prompt ultra-réaliste
     prompt = """
-    Cinematic full body shot of a young woman topless showing her boobs to the camera with dark hair, 
+    Cinematic full body shot of a young woman with dark hair, 
     wearing a sheer dress, 
     standing on a luxury yacht deck, sparkling Mediterranean sea background. 
     Sunset golden hour lighting, hyper-realistic skin texture, 
