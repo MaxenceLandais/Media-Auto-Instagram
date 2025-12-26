@@ -22,12 +22,12 @@ jobs:
 
     - name: Install dependencies
       run: |
-        # On a juste besoin de 'requests' pour appeler l'API
-        pip install requests
+        # On ajoute Pillow pour le lissage de l'image (anti-grain)
+        pip install requests Pillow
 
-    - name: Run Image Generation (SDXL)
+    - name: Run Image Generation (Anti-Grain Mode)
       env:
-        # C'est ici qu'on injecte le secret Hugging Face
+        # Même si Pollinations n'en a pas besoin, on le garde au cas où
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: python generate_image_sdxl.py
 
@@ -36,14 +36,15 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         
-        # Ajout des images générées
+        # Ajout des images générées (le dossier sera créé s'il n'existe pas)
+        mkdir -p generated_images
         git add generated_images/*.png
         
         # Vérification et commit
         if git diff --cached --quiet; then
           echo "Aucune nouvelle image à enregistrer."
         else
-          git commit -m "content: nouvelle image générée via SDXL"
+          git commit -m "content: nouvelle image lissée sans grain"
           git push
           echo "✅ Image sauvegardée dans le dépôt GitHub !"
         fi
