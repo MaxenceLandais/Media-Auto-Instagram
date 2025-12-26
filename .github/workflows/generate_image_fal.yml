@@ -1,0 +1,52 @@
+name: Generate Pro Image with Fal.ai
+
+on:
+  workflow_dispatch: # Permet de lancer la génération manuellement
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    
+    # Autorise GitHub à écrire les fichiers dans votre dépôt
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        # Installation des bibliothèques nécessaires pour Fal.ai
+        pip install requests fal-client
+
+    - name: Run Image Generation (Flux Model)
+      env:
+        # C'est ici que GitHub récupère votre clé API Fal.ai
+        FAL_KEY: ${{ secrets.FAL_KEY }}
+      run: python generate_image_fal.py
+
+    - name: Commit and Push Generated Images
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        
+        # S'assure que le dossier existe
+        mkdir -p generated_images
+        
+        # Ajoute uniquement les nouvelles images
+        git add generated_images/*.png
+        
+        # Vérifie s'il y a des changements avant de commit
+        if git diff --cached --quiet; then
+          echo "Aucune nouvelle image à enregistrer."
+        else
+          git commit -m "content: nouvelle image pro générée avec Flux et Fal.ai"
+          git push
+          echo "✅ Image sauvegardée avec succès sur votre dépôt !"
+        fi
