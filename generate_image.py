@@ -103,7 +103,46 @@ def generate_image_with_vertex_ai(
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1"
-    my_prompt = "Fais une infographie journalistique pour instagram pour annoncer les 10 ans des attentas du Bataclan qui ont eu lieu le 13 novembre 2015 en France."
+    my_prompt = "{
+  "image_generation_prompt": {
+    "subject_details": {
+      "main_subject": "Woman",
+      "reference_adherence": "Reference face and body 100% match",
+      "pose": "Leaning against dark wooden bedpost, right arm raised holding the post"
+    },
+    "apparel": {
+      "type": "Black lace loungewear set",
+      "components": [
+        "Solid black crop top",
+        "Matching shorts",
+        "Open sheer floral robe"
+      ],
+      "accessories": "Minimal jewelry"
+    },
+    "environment": {
+      "location": "Bright bedroom",
+      "furniture_and_decor": [
+        "Dark wooden bedpost",
+        "Cream louvered wardrobe doors",
+        "White bed",
+        "Wood floor"
+      ]
+    },
+    "technical_specs": {
+      "resolution": "8K",
+      "style": "Photorealistic portrait",
+      "lighting": "Soft natural lighting",
+      "camera_settings": "85mm lens, f/2.8 aperture",
+      "focus": "Sharp focus"
+    },
+    "artistic_direction": {
+      "mood": "Elegant lifestyle"
+    },
+    "parameters": {
+      "aspect_ratio": "--ar 3:4"
+    }
+  }
+}"
 
     generate_image_with_vertex_ai(
         project_id=PROJECT_ID,
