@@ -1,17 +1,11 @@
-name: Generate Image with Vertex AI (Imagen 3)
+name: Generate Image to GCS
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 0 * * *'
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write 
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -19,46 +13,20 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11' # Version recommandée pour éviter les warnings
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install google-cloud-aiplatform
+        pip install google-cloud-aiplatform google-cloud-storage
 
     - name: Set up Google Cloud Authentication
       run: |
-        # On écrit directement le contenu JSON brut dans le fichier de clé
-        # Suppression du pipe base64 qui causait l'erreur
         echo '${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}' > gcp_sa_key.json
-        
-        # Définition de la variable d'environnement pour le SDK Google Cloud
         echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_sa_key.json" >> $GITHUB_ENV
         
-    - name: Run Image Generation Script
-      # Assure-toi que ton fichier s'appelle bien generate_image_v2.py sur ton dépôt
+    - name: Run Image Generation
       run: python generate_image_v2.py
 
-    - name: Commit and Push Generated Images
-      if: always() 
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        
-        # Le script v2 utilise le dossier 'instagram_posts'
-        OUTPUT_DIR="instagram_posts"
-        
-        if [ -d "$OUTPUT_DIR" ] && ls $OUTPUT_DIR/*.png > /dev/null 2>&1; then
-          echo "Images Imagen 3 trouvées dans $OUTPUT_DIR. Préparation du commit..."
-          git add $OUTPUT_DIR/*.png
-          
-          if git diff --cached --quiet; then
-            echo "Aucune nouvelle modification."
-          else
-            git commit -m "chore: Publication Instagram générée par Imagen 3"
-            git push
-            echo "Images poussées sur le dépôt."
-          fi
-        else
-          echo "Aucun fichier PNG trouvé dans $OUTPUT_DIR. Vérifiez les logs de l'étape précédente."
-        fi
+    - name: Cleanup
+      if: always()
+      run: rm -f gcp_sa_key.json
