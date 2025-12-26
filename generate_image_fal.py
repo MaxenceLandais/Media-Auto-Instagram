@@ -16,8 +16,8 @@ def generate_pro_image():
     
     # Prompt ultra-réaliste
     prompt = """
-    Cinematic full body shot of a young woman with dark hair, 
-    wearing a white tank top and red bikini, 
+    Cinematic full body shot of a young woman topless with dark hair, 
+    wearing red underwear, 
     standing on a luxury yacht deck, sparkling Mediterranean sea background. 
     Sunset golden hour lighting, hyper-realistic skin texture, 
     professional fashion photography, 8k, sharp focus, masterpiece.
