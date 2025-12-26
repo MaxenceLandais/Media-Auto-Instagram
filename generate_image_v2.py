@@ -2,6 +2,7 @@ import os
 import datetime
 from google.cloud import aiplatform
 from google.cloud.aiplatform_v1beta1.services.prediction_service import PredictionServiceClient
+from google.cloud.aiplatform_v1beta1.types import PredictionServiceResponse
 
 def generate_image_to_gcs(
     project_id: str,
@@ -19,21 +20,22 @@ def generate_image_to_gcs(
 
         instances_json = [{"prompt": prompt}]
         
-        # Génération du nom de fichier avec timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        gcs_uri = f"gs://{bucket_name}/insta_post_{timestamp}.png"
+        # Note : Imagen 3 gère souvent le storageUri comme un dossier ou un préfixe
+        gcs_uri_prefix = f"gs://{bucket_name}/insta_post_{timestamp}"
 
-        # Paramètres corrigés pour éviter l'erreur 400
+        # Utilisation de width/height pour éviter l'erreur "Invalid aspect ratio"
         parameters_json = {
             "sampleCount": num_images,
-            "aspect_ratio": "4:5", # Essayez avec l'underscore si le camelCase échoue
-            "storageUri": gcs_uri
+            "width": 896,
+            "height": 1120,
+            "storageUri": gcs_uri_prefix 
         }
 
         endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}"
 
         print(f"--- GÉNÉRATION IMAGEN 3 VERS GCS ---")
-        print(f"Destination : {gcs_uri}")
+        print(f"Destination préfixe : {gcs_uri_prefix}")
 
         response = client.predict(
             endpoint=endpoint,
@@ -42,12 +44,14 @@ def generate_image_to_gcs(
             timeout=120.0
         )
 
-        # En mode GCS, on vérifie simplement s'il n'y a pas d'erreur
+        # Correction de la vérification de réponse
         if response:
-            print(f"✅ SUCCÈS : Image en cours d'écriture dans le bucket.")
-            print(f"🔗 URL Publique probable : https://storage.googleapis.com/{bucket_name}/insta_post_{timestamp}.png")
+            print(f"✅ APPEL RÉUSSI : Le processus de génération est terminé.")
+            # En mode GCS, l'API peut renvoyer un objet vide mais un code 200 OK.
+            print(f"Vérifiez votre bucket ici : https://console.cloud.google.com/storage/browser/{bucket_name}")
+            print(f"URL publique estimée : https://storage.googleapis.com/{bucket_name}/insta_post_{timestamp}_1.png")
         else:
-            print("❌ Erreur : Aucune réponse de l'API.")
+            print("❌ Erreur : L'API a renvoyé une réponse vide.")
 
     except Exception as e:
         print(f"❌ ERREUR CRITIQUE : {e}")
@@ -55,7 +59,7 @@ def generate_image_to_gcs(
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1"
-    BUCKET_NAME = "media-auto-instagram" # Nom de votre bucket
+    BUCKET_NAME = "media-auto-instagram"
     
     my_prompt = """Photorealistic portrait of a woman leaning against a dark wooden bedpost, 
     right arm raised holding the post. She is wearing a black lace loungewear set with a crop top, 
