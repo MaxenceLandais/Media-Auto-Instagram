@@ -1,4 +1,4 @@
-name: Generate Image to GCS
+name: Generate Image to GitHub Repo
 
 on:
   workflow_dispatch:
@@ -6,6 +6,11 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    
+    # INDISPENSABLE : Autorise le workflow à envoyer des fichiers vers le dépôt
+    permissions:
+      contents: write
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -17,7 +22,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install google-cloud-aiplatform google-cloud-storage
+        # On s'assure d'avoir la dernière version de aiplatform pour Imagen 3
+        pip install google-cloud-aiplatform>=1.70.0 google-cloud-storage
 
     - name: Set up Google Cloud Authentication
       run: |
@@ -26,6 +32,24 @@ jobs:
         
     - name: Run Image Generation
       run: python generate_image_v2.py
+
+    - name: Commit and Push Generated Images
+      # Cette étape sauvegarde l'image du serveur temporaire vers ton GitHub
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        
+        # On ajoute le dossier créé par le script Python
+        git add generated_images/*.png
+        
+        # On vérifie s'il y a des changements pour éviter de faire planter le script
+        if git diff --cached --quiet; then
+          echo "Aucune nouvelle image à enregistrer."
+        else
+          git commit -m "chore: ajout de l'image générée via Vertex AI"
+          git push
+          echo "✅ Image sauvegardée dans le dépôt GitHub !"
+        fi
 
     - name: Cleanup
       if: always()
