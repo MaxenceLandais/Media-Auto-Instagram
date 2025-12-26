@@ -23,11 +23,11 @@ def generate_image_to_gcs(
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         gcs_uri = f"gs://{bucket_name}/insta_post_{timestamp}.png"
 
-        # Paramètres pour l'export vers GCS
+        # Paramètres corrigés pour éviter l'erreur 400
         parameters_json = {
             "sampleCount": num_images,
-            "aspectRatio": "4:5",
-            "storageUri": gcs_uri  # On indique ici le chemin exact dans le bucket
+            "aspect_ratio": "4:5", # Essayez avec l'underscore si le camelCase échoue
+            "storageUri": gcs_uri
         }
 
         endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}"
