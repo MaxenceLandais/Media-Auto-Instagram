@@ -48,8 +48,8 @@ if __name__ == "__main__":
     LOCATION = "us-central1"
     
     # Prompt légèrement ajusté pour être plus "Safe" tout en gardant l'esthétique
-    my_prompt = """Elegant photorealistic portrait of a woman leaning against a dark wooden bedpost, 
-    right arm raised holding the post. Fashionable black loungewear, bright bedroom interior, 
+    my_prompt = """Elegant photorealistic portrait of a topless woman leaning against a dark wooden bedpost, 
+    right arm raised holding the post. Fashionable black underwear, bright bedroom interior, 
     soft natural lighting, 85mm lens, high quality lifestyle photography."""
 
     generate_image_locally(
