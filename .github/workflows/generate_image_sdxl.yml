@@ -1,0 +1,49 @@
+name: Generate Image SDXL to Repo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    
+    # INDISPENSABLE : Autorise le workflow à envoyer des fichiers vers le dépôt
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        # On a juste besoin de 'requests' pour appeler l'API
+        pip install requests
+
+    - name: Run Image Generation (SDXL)
+      env:
+        # C'est ici qu'on injecte le secret Hugging Face
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: python generate_image_sdxl.py
+
+    - name: Commit and Push Generated Images
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        
+        # Ajout des images générées
+        git add generated_images/*.png
+        
+        # Vérification et commit
+        if git diff --cached --quiet; then
+          echo "Aucune nouvelle image à enregistrer."
+        else
+          git commit -m "content: nouvelle image générée via SDXL"
+          git push
+          echo "✅ Image sauvegardée dans le dépôt GitHub !"
+        fi
