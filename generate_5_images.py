@@ -10,7 +10,7 @@ def get_creative_scenes(project_id, location, num_scenes=5):
     vertexai.init(project=project_id, location=location)
     
     # Utilisation de Gemini 1.5 Flash pour la rapidité et l'inventivité
-    model = GenerativeModel("gemini-1.5-flash")
+    model = GenerativeModel("gemini-2.5-flash")
     
     prompt_instruction = (
         f"Generate {num_scenes} ultra-detailed image prompts for a high-end Instagram account. "
