@@ -1,7 +1,7 @@
 name: Generate Old Money Reel Assets
 
 on:
-  workflow_dispatch:  # Lancement manuel
+  workflow_dispatch:  # Déclenchement manuel
 
 jobs:
   generate:
@@ -18,10 +18,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies (ffmpeg + libs)
+      # === Correction des dépendances système pour Ubuntu 24.04 ===
+      - name: Install system dependencies (ffmpeg + OpenGL/Video libraries)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libsm6 libxext6 libfontconfig1 libxrender1 libgl1-mesa-glx
+          sudo apt-get install -y \
+            ffmpeg \
+            libsm6 \
+            libxext6 \
+            libfontconfig1 \
+            libxrender1 \
+            libglib2.0-0 \
+            libgl1-mesa-dev \      # Remplace l'ancien libgl1-mesa-glx
+            libglu1-mesa-dev \     # Utile pour certains backends OpenGL
+            libgtk-3-0 \           # Parfois nécessaire pour moviepy/imageio
+            libxi6 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2
 
       - name: Install Python packages
         run: |
@@ -36,7 +50,7 @@ jobs:
           echo "$GCS_SERVICE_ACCOUNT_KEY" > gcp_key.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_key.json" >> $GITHUB_ENV
 
-      - name: Run generation script
+      - name: Run generation script (5 images + 10s reel)
         run: python generate_video_5_images.py
 
       - name: Commit & Push generated assets
@@ -49,11 +63,11 @@ jobs:
           git add generated_images/*
           
           if git diff --cached --quiet; then
-            echo "Aucun nouveau fichier à pousser."
+            echo "Aucun nouveau fichier généré."
           else
             git commit -m "feat: nouveau pack Old Money – 5 images + reel 10s ($(date +'%Y-%m-%d %H:%M'))"
             git push
-            echo "✅ Tout poussé sur le repo !"
+            echo "✅ Images et vidéo poussées sur le repo !"
           fi
 
       - name: Cleanup credentials
