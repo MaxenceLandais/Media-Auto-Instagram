@@ -103,46 +103,7 @@ def generate_image_with_vertex_ai(
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1"
-    my_prompt = "{
-  "image_generation_prompt": {
-    "subject_details": {
-      "main_subject": "Woman",
-      "reference_adherence": "Reference face and body 100% match",
-      "pose": "Leaning against dark wooden bedpost, right arm raised holding the post"
-    },
-    "apparel": {
-      "type": "Black lace loungewear set",
-      "components": [
-        "Solid black crop top",
-        "Matching shorts",
-        "Open sheer floral robe"
-      ],
-      "accessories": "Minimal jewelry"
-    },
-    "environment": {
-      "location": "Bright bedroom",
-      "furniture_and_decor": [
-        "Dark wooden bedpost",
-        "Cream louvered wardrobe doors",
-        "White bed",
-        "Wood floor"
-      ]
-    },
-    "technical_specs": {
-      "resolution": "8K",
-      "style": "Photorealistic portrait",
-      "lighting": "Soft natural lighting",
-      "camera_settings": "85mm lens, f/2.8 aperture",
-      "focus": "Sharp focus"
-    },
-    "artistic_direction": {
-      "mood": "Elegant lifestyle"
-    },
-    "parameters": {
-      "aspect_ratio": "--ar 3:4"
-    }
-  }
-}"
+    my_prompt = ""Rear view of a young couple driving in a classic black 1960s Ford Thunderbird convertible along a coastal road at sunset, ocean on the left, clear sky, woman in passenger seat with long blonde hair raising both arms in joy and freedom, man driving wearing sunglasses, cinematic aesthetic, high detail, photorealistic, soft lighting --ar 9:16 --v 5""
 
     generate_image_with_vertex_ai(
         project_id=PROJECT_ID,
