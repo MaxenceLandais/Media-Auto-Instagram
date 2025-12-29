@@ -8,3 +8,4 @@ Pillow                  # Nécessaire pour manipuler les données d'image
 google-generativeai
 google-auth
 fal-client
+moviepy
