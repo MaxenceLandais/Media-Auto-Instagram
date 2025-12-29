@@ -1,0 +1,52 @@
+name: Generate Old Money Reel Assets
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install google-cloud-aiplatform>=1.70.0
+
+    - name: Set up Google Cloud Authentication
+      run: |
+        echo '${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}' > gcp_sa_key.json
+        echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_sa_key.json" >> $GITHUB_ENV
+        
+    - name: Run Image Generation Session
+      # CORRECTION ICI : Nom exact de ton fichier
+      run: python generate_5_images.py
+
+    - name: Commit and Push All Generated Images
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        
+        # Ajout récursif pour capturer les sous-dossiers créés par le script
+        git add generated_images/**
+        
+        if git diff --cached --quiet; then
+          echo "Aucun changement détecté."
+        else
+          git commit -m "chore: génération du pack de 5 images via Gemini & Imagen 4"
+          git push
+          echo "✅ Images enregistrées sur GitHub !"
+        fi
+
+    - name: Cleanup
+      if: always()
+      run: rm -f gcp_sa_key.json
