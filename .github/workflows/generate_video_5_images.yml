@@ -1,7 +1,7 @@
 name: Generate Old Money Reel Assets
 
 on:
-  workflow_dispatch:  # Déclenchement manuel
+  workflow_dispatch:
 
 jobs:
   generate:
@@ -18,8 +18,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      # === Correction des dépendances système pour Ubuntu 24.04 ===
-      - name: Install system dependencies (ffmpeg + OpenGL/Video libraries)
+      - name: Install minimal system dependencies (ffmpeg + basic X11 libs)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -28,14 +27,7 @@ jobs:
             libxext6 \
             libfontconfig1 \
             libxrender1 \
-            libglib2.0-0 \
-            libgl1-mesa-dev \      # Remplace l'ancien libgl1-mesa-glx
-            libglu1-mesa-dev \     # Utile pour certains backends OpenGL
-            libgtk-3-0 \           # Parfois nécessaire pour moviepy/imageio
-            libxi6 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxrandr2
+            libglib2.0-0
 
       - name: Install Python packages
         run: |
