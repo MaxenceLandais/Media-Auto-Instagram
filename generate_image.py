@@ -2,43 +2,39 @@ import base64
 import os
 import datetime
 from google.cloud import aiplatform
-
-# --- IMPORTS POUR L'API DE PRÉDICTION ---
 from google.cloud.aiplatform_v1beta1.services.prediction_service import PredictionServiceClient
 from google.cloud.aiplatform_v1beta1.types import Value 
-
 
 def generate_image_with_vertex_ai(
     project_id: str,
     location: str,
     prompt: str,
-    model_name: str = "imagegeneration",
+    model_name: str = "imagegeneration@006", # Utilisation de la version la plus récente (Imagen 3)
     output_dir: str = "generated_images",
     num_images: int = 1,
-    image_width: int = 512,
-    image_height: int = 512,
     mime_type: str = "image/png"
 ):
-    """
-    Génère une ou plusieurs images en utilisant l'API Vertex AI via PredictionServiceClient.
-    """
     try:
         aiplatform.init(project=project_id, location=location)
-
         client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
         client = PredictionServiceClient(client_options=client_options)
 
-        instances_json = [{"prompt": prompt}]
+        # 1. Nettoyage du prompt (on retire les tags Midjourney pour éviter de confondre Imagen)
+        clean_prompt = prompt.replace("--ar 9:16", "").replace("--v 5", "").strip()
+
+        instances_json = [{"prompt": clean_prompt}]
         
+        # 2. Paramétrage du format 9:16 pour Instagram
+        # Note : Pour Imagen sur Vertex AI, on utilise "aspectRatio": "9:16"
         parameters_json = {
-            "sample_count": num_images,
-            "width": image_width,
-            "height": image_height,
+            "sampleCount": num_images,
+            "aspectRatio": "9:16", 
+            "personGeneration": "allow_all" # Important pour voir le couple
         }
 
         endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}"
 
-        print(f"Tentative de génération de {num_images} image(s) ({image_width}x{image_height}) avec le prompt: '{prompt}' via l'endpoint '{endpoint}'...")
+        print(f"Génération au format 9:16 avec le prompt: '{clean_prompt}'...")
 
         response = client.predict(
             endpoint=endpoint,
@@ -49,69 +45,37 @@ def generate_image_with_vertex_ai(
 
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-            print(f"Répertoire '{output_dir}' créé.")
 
-        # --- CHANGEMENT CLÉ ICI : ACCÈS À LA PRÉDICTION ---
         if response and response.predictions:
             for i, prediction_value_object in enumerate(response.predictions):
-                # Convertir l'objet Value ou MapComposite en dictionnaire Python
-                # Cela garantit que nous pouvons accéder aux clés comme un dict normal.
-                prediction_dict = {}
-                if hasattr(prediction_value_object, 'struct_value'): # Cas typique de Value
-                    prediction_dict = prediction_value_object.struct_value
-                elif hasattr(prediction_value_object, 'fields'): # Autre structure possible pour MapComposite
-                    # Il faut reconstruire le dict à partir des champs
-                    prediction_dict = {key: getattr(value, 'string_value', None) or \
-                                            getattr(value, 'number_value', None) or \
-                                            getattr(value, 'bool_value', None) or \
-                                            getattr(value, 'struct_value', None) or \
-                                            getattr(value, 'list_value', None) \
-                                            for key, value in prediction_value_object.fields.items()}
-                else: # Cas le plus simple si l'objet est déjà un dict-like ou directement le contenu
-                    # Tenter de convertir directement si ce n'est pas un proto object
-                    try:
-                        prediction_dict = dict(prediction_value_object) 
-                    except TypeError:
-                        print(f"Avertissement: Impossible de convertir l'objet de prédiction {i+1} en dictionnaire.")
-                        continue # Passer à la prédiction suivante
+                # Extraction des données base64
+                # Selon la version de l'API, la structure peut varier légèrement
+                pred = dict(prediction_value_object)
                 
-                # Maintenant, nous pouvons accéder à 'bytesBase64Encoded'
-                if "bytesBase64Encoded" in prediction_dict:
-                    image_bytes = base64.b64decode(prediction_dict["bytesBase64Encoded"])
-                    
+                if "bytesBase64Encoded" in pred:
+                    image_bytes = base64.b64decode(pred["bytesBase64Encoded"])
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = os.path.join(output_dir, f"generated_image_{timestamp}_{i+1}.{mime_type.split('/')[-1]}")
+                    filename = os.path.join(output_dir, f"insta_916_{timestamp}_{i+1}.png")
 
                     with open(filename, "wb") as f:
                         f.write(image_bytes)
-                    print(f"Image {i+1} générée et sauvegardée sous {filename}")
-                else:
-                    print(f"Avertissement: La prédiction {i+1} ne contient pas de données d'image valides. Contenu: {prediction_dict}")
+                    print(f"✅ Image Instagram sauvegardée : {filename}")
         else:
-            print("Aucune prédiction d'image reçue de l'API Vertex AI.")
+            print("Aucune image générée.")
 
     except Exception as e:
-        print(f"ERREUR: Une erreur est survenue lors de la génération d'images: {e}")
-        print("\nPoints à vérifier impérativement:")
-        print("1. **Permissions:** Le compte de service a les rôles nécessaires (Administrateur Vertex AI). (Confirmé)")
-        print("2. **Authentification:** La variable GOOGLE_APPLICATION_CREDENTIALS est correctement définie. (Confirmé)")
-        print("3. **Nom du Modèle:** 'imagegeneration' est le nom correct.")
-        print("4. **Région:** 'us-central1' est utilisée. (Confirmé)")
-        print("5. **Quotas:** Le quota est bon. (Confirmé)")
-        print("6. **Logs Vertex AI:** Consultez l'explorateur de journaux pour plus de détails sur la réponse API.")
+        print(f"ERREUR: {e}")
 
 if __name__ == "__main__":
     PROJECT_ID = "media-auto-instagram" 
     LOCATION = "us-central1"
-    my_prompt = ""Rear view of a young couple driving in a classic black 1960s Ford Thunderbird convertible along a coastal road at sunset, ocean on the left, clear sky, woman in passenger seat with long blonde hair raising both arms in joy and freedom, man driving wearing sunglasses, cinematic aesthetic, high detail, photorealistic, soft lighting --ar 9:16 --v 5""
+    
+    # Prompt optimisé pour Google Imagen
+    my_prompt = "Rear view of a young couple driving in a classic black 1960s Ford Thunderbird convertible along a coastal road at sunset, ocean on the left, clear sky, woman in passenger seat with long blonde hair raising both arms in joy and freedom, man driving wearing sunglasses, cinematic aesthetic, high detail, photorealistic, soft lighting"
 
     generate_image_with_vertex_ai(
         project_id=PROJECT_ID,
         location=LOCATION,
         prompt=my_prompt,
-        model_name="imagegeneration",
-        num_images=1,
-        image_width=512,
-        image_height=512,
-        mime_type="image/png"
+        model_name="imagegeneration@006" # Version supportant mieux les différents ratios
     )
