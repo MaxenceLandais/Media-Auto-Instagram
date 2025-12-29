@@ -1,46 +1,45 @@
 name: Generate Old Money Reel Assets
 
 on:
-  workflow_dispatch:  # Déclenchement manuel depuis GitHub Actions
+  workflow_dispatch:  # Lancement manuel
 
 jobs:
   generate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Autorise le push sur le repository
+      contents: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies for moviepy
+      - name: Install system dependencies (ffmpeg + libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libsm6 libxext6  # ffmpeg obligatoire pour encoder la vidéo
+          sudo apt-get install -y ffmpeg libsm6 libxext6 libfontconfig1 libxrender1 libgl1-mesa-glx
 
-      - name: Install Python dependencies
+      - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install google-cloud-aiplatform>=1.70.0
-          pip install moviepy
+          pip install moviepy imageio-ffmpeg
 
-      - name: Set up Google Cloud Authentication
+      - name: Google Cloud Authentication
         env:
           GCS_SERVICE_ACCOUNT_KEY: ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
         run: |
-          echo "$GCS_SERVICE_ACCOUNT_KEY" > gcp_sa_key.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_sa_key.json" >> $GITHUB_ENV
+          echo "$GCS_SERVICE_ACCOUNT_KEY" > gcp_key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_key.json" >> $GITHUB_ENV
 
-      - name: Run Generation Script (Images + 10s Video)
+      - name: Run generation script
         run: python generate_video_5_images.py
-        # Le script generate_video_5_images.py doit être présent à la racine du repo
 
-      - name: Commit and Push Generated Assets (Images + Video)
+      - name: Commit & Push generated assets
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -50,13 +49,13 @@ jobs:
           git add generated_images/*
           
           if git diff --cached --quiet; then
-            echo "Aucun nouveau fichier généré."
+            echo "Aucun nouveau fichier à pousser."
           else
-            git commit -m "chore: nouveau pack Old Money – 5 images + reel 10s (session $(date +%Y%m%d_%H%M%S))"
+            git commit -m "feat: nouveau pack Old Money – 5 images + reel 10s ($(date +'%Y-%m-%d %H:%M'))"
             git push
-            echo "✅ Images et vidéo Reel poussées sur le repo !"
+            echo "✅ Tout poussé sur le repo !"
           fi
 
       - name: Cleanup credentials
         if: always()
-        run: rm -f gcp_sa_key.json
+        run: rm -f gcp_key.json
