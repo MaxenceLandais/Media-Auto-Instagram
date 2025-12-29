@@ -18,7 +18,7 @@ def get_creative_scenes(project_id, location, num_scenes=NUM_SCENES):
     print(f"--- [LOG] Initialisation de Gemini ({location}) ---")
     vertexai.init(project=project_id, location=location)
     
-    model = GenerativeModel("gemini-1.5-flash")  # Rapide et créatif
+    model = GenerativeModel("gemini-2.5-flash")  # Rapide et créatif
     
     prompt_instruction = (
         f"Generate {num_scenes} ultra-detailed image prompts for a high-end Instagram account. "
