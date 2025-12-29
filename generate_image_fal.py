@@ -16,11 +16,7 @@ def generate_pro_image():
     
     # Prompt ultra-réaliste
     prompt = """
-    Cinematic full body shot of a young woman with dark hair, 
-    wearing a sheer dress, 
-    standing on a luxury yacht deck, sparkling Mediterranean sea background. 
-    Sunset golden hour lighting, hyper-realistic skin texture, 
-    professional fashion photography, 8k, sharp focus, masterpiece.
+    Rear view of a young couple driving in a classic black 1960s Ford Thunderbird convertible along a coastal road at sunset, ocean on the left, clear sky, woman in passenger seat with long blonde hair raising both arms in joy and freedom, man driving wearing sunglasses, cinematic aesthetic, high detail, photorealistic, soft lighting --ar 9:16 --v 5
     """
 
     try:
