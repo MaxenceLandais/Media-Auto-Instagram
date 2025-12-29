@@ -7,7 +7,7 @@ from vertexai.preview.vision_models import ImageGenerationModel
 def get_creative_scenes(project_id, location, num_scenes=5):
     """Demande à Gemini d'inventer 5 scènes Old Money uniques."""
     vertexai.init(project=project_id, location=location)
-    model = GenerativeModel("gemini-1.5-flash") # Utilisation de Gemini pour la créativité
+    model = GenerativeModel("gemini-2.5-flash") # Utilisation de Gemini pour la créativité
     
     instruction = (
         f"Generate {num_scenes} highly detailed image prompts for an 'Old Money' and 'Luxury' lifestyle. "
