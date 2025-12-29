@@ -11,7 +11,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: uses: actions/checkout@v4
+      uses: actions/checkout@v4 # Corrigé : un seul 'uses' ici
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -28,7 +28,6 @@ jobs:
         echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_sa_key.json" >> $GITHUB_ENV
         
     - name: Run Image Generation Session
-      # CORRECTION ICI : Nom exact de ton fichier
       run: python generate_5_images.py
 
     - name: Commit and Push All Generated Images
@@ -36,8 +35,10 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         
-        # Ajout récursif pour capturer les sous-dossiers créés par le script
-        git add generated_images/**
+        # On s'assure que le dossier existe pour éviter une erreur git add
+        mkdir -p generated_images
+        
+        git add generated_images/*
         
         if git diff --cached --quiet; then
           echo "Aucun changement détecté."
