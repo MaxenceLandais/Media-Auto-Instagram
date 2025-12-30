@@ -1,92 +1,66 @@
 import os
 import datetime
-import sys
 
-# === Vérification précoce de ffmpeg ===
-try:
-    import imageio
-    imageio.plugins.ffmpeg.download()  # Télécharge une version portable de ffmpeg si besoin
-    print("--- [LOG] imageio-ffmpeg initialisé avec succès ---")
-except Exception as e:
-    print(f"--- [WARNING] Problème avec imageio-ffmpeg : {e} ---")
-
-try:
-    from moviepy.editor import ImageClip, concatenate_videoclips
-    print("--- [LOG] moviepy importé avec succès ---")
-except ImportError as e:
-    print(f"--- [ERREUR FATALE] Impossible d'importer moviepy : {e} ---")
-    sys.exit(1)
+# Import corrigé pour MoviePy v2+ (plus de .editor)
+from moviepy import ImageClip, concatenate_videoclips
 
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from vertexai.preview.vision_models import ImageGenerationModel
 
 # ==================== CONFIGURATION ====================
-PROJECT_ID = "media-auto-instagram"          # À adapter si différent
+PROJECT_ID = "media-auto-instagram"
 LOCATION = "us-central1"
-MODEL_NAME = "imagen-4.0-ultra-generate-001" # ou "imagen-3.0-generate-001" si tu n'as pas accès à la v4
+MODEL_NAME = "imagen-4.0-ultra-generate-001"  # ou imagen-3 si besoin
 NUM_SCENES = 5
-DURATION_PER_IMAGE = 2.0  # secondes → 10s total
+DURATION_PER_IMAGE = 2.0  # 10 secondes total
 # ======================================================
 
 def get_creative_scenes(project_id, location, num_scenes=NUM_SCENES):
-    print(f"--- [LOG] Initialisation de Gemini ({location}) ---")
+    print("--- [LOG] Initialisation Gemini ---")
     vertexai.init(project=project_id, location=location)
-    
-    model = GenerativeModel("gemini-2.5-flash")
-    
+    model = GenerativeModel("gemini-1.5-flash")
+
     prompt_instruction = (
-        f"Generate {num_scenes} ultra-detailed image prompts for a high-end Instagram account. "
-        "Style: 'Old Money', timeless luxury, cinematic, grand landscapes. "
-        "Subjects: Young elegant European man and/or woman, impeccably dressed. "
-        "Variety: Different locations (Swiss Alps, Monaco Riviera, Tuscany countryside, Lake Como, Scottish Highlands), "
-        "different lightings (golden hour, misty morning, dramatic sunset), and subtle activities. "
-        "Avoid any mention of children to pass safety filters. "
-        "Return ONLY the list of prompts, one per line, no numbers, no quotes, no extra text."
+        f"Generate {num_scenes} ultra-detailed image prompts for a luxury 'Old Money' aesthetic Instagram reel. "
+        "Subjects: young elegant European man and/or woman, impeccably dressed in timeless fashion. "
+        "Locations: Swiss Alps, Monaco, Tuscany hills, Lake Como, Scottish Highlands, French Riviera. "
+        "Lighting: golden hour, misty morning, dramatic sunset, soft natural light. "
+        "Atmosphere: sophisticated, serene, cinematic, grand landscapes. "
+        "Return ONLY the prompts, one per line, no numbering, no quotes, no extra text."
     )
-    
-    print("--- [LOG] Envoi de la requête à Gemini ---")
+
     try:
         response = model.generate_content(prompt_instruction)
-        prompts = [p.strip() for p in response.text.split('\n') if len(p.strip()) > 20]
-        print(f"--- [LOG] {len(prompts)} prompts reçus de Gemini ---")
-        for i, p in enumerate(prompts[:num_scenes]):
-            print(f"    Prompt {i+1}: {p[:120]}...")
+        prompts = [line.strip() for line in response.text.split('\n') if len(line.strip()) > 20]
+        print(f"--- [LOG] {len(prompts)} prompts générés ---")
         return prompts[:num_scenes]
     except Exception as e:
-        print(f"--- [ERREUR] Gemini a échoué : {e} ---")
+        print(f"--- [ERREUR] Gemini : {e} ---")
         return []
 
-def generate_images_and_video(project_id=PROJECT_ID, location=LOCATION, model_name=MODEL_NAME):
-    print(f"\n=== DÉBUT DE LA GÉNÉRATION - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
-    
-    vertexai.init(project=project_id, location=location)
-    image_model = ImageGenerationModel.from_pretrained(model_name)
-    
+def generate_images_and_video():
+    print(f"\n=== DÉBUT SESSION - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+
+    vertexai.init(project=PROJECT_ID, location=LOCATION)
+    image_model = ImageGenerationModel.from_pretrained(MODEL_NAME)
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     session_folder = f"session_{timestamp}"
     output_dir = os.path.join("generated_images", session_folder)
     os.makedirs(output_dir, exist_ok=True)
-    print(f"--- [LOG] Dossier de sortie : {output_dir} ---")
-    
-    scenes = get_creative_scenes(project_id, location)
+    print(f"--- Dossier de sortie : {output_dir} ---")
+
+    scenes = get_creative_scenes(PROJECT_ID, LOCATION)
     if not scenes:
-        print("--- [ERREUR] Aucun prompt généré. Arrêt du script.")
+        print("Aucun prompt → arrêt.")
         return
-    
+
     image_paths = []
-    success_count = 0
-    
-    for i, scene_prompt in enumerate(scenes):
-        index = i + 1
-        print(f"\n--- [IMAGE {index}/{NUM_SCENES}] Génération en cours... ---")
-        
+    for i, prompt in enumerate(scenes):
+        print(f"\n--- Génération image {i+1}/{NUM_SCENES} ---")
         try:
-            final_prompt = (
-                f"{scene_prompt}, cinematic lighting, shot on 35mm film, shallow depth of field f/1.8, "
-                "elegant and sophisticated atmosphere, ultra detailed textures, timeless luxury aesthetic"
-            )
-            
+            final_prompt = f"{prompt}, cinematic 35mm film look, f/1.8, ultra detailed, luxury old money aesthetic"
             response = image_model.generate_images(
                 prompt=final_prompt,
                 number_of_images=1,
@@ -94,62 +68,48 @@ def generate_images_and_video(project_id=PROJECT_ID, location=LOCATION, model_na
                 safety_filter_level="block_only_high",
                 person_generation="allow_adult"
             )
-            
-            if response and response.images and len(response.images) > 0:
-                filename = os.path.join(output_dir, f"scene_{index}.png")
-                response.images[0].save(location=filename, include_generation_parameters=False)
-                print(f"--- [SUCCÈS] Image {index} sauvegardée : {filename}")
-                image_paths.append(filename)
-                success_count += 1
+            if response.images:
+                path = os.path.join(output_dir, f"scene_{i+1}.png")
+                response.images[0].save(location=path)
+                print(f"✓ Image {i+1} sauvegardée")
+                image_paths.append(path)
             else:
-                print(f"--- [WARNING] Aucune image retournée pour la scène {index} (filtre de sécurité ?)")
-                
+                print(f"✗ Image {i+1} bloquée")
         except Exception as e:
-            print(f"--- [ERREUR] Échec génération image {index} : {e} ---")
-    
-    print(f"\n--- Génération d'images terminée : {success_count}/{NUM_SCENES} réussies ---\n")
-    
+            print(f"✗ Erreur image {i+1} : {e}")
+
     if not image_paths:
-        print("Aucune image générée → pas de vidéo créée.")
+        print("Aucune image → pas de vidéo.")
         return
-    
-    # ==================== CRÉATION DE LA VIDÉO ====================
-    print("--- [VIDÉO] Assemblage de la vidéo 10 secondes en cours... ---")
-    
+
+    print("\n--- Création vidéo Reel 10s ---")
     try:
         clips = []
-        for img_path in image_paths:
-            clip = ImageClip(img_path).set_duration(DURATION_PER_IMAGE)
-            # Zoom doux progressif pour un effet cinématique
-            clip = clip.resize(lambda t: 1 + 0.04 * t)  # Zoom de 4% sur 2 secondes
+        for path in image_paths:
+            clip = ImageClip(path).set_duration(DURATION_PER_IMAGE)
+            clip = clip.resize(lambda t: 1 + 0.04 * t)  # Zoom doux
             clips.append(clip)
-        
-        final_video = concatenate_videoclips(clips, method="compose")
-        
+
+        video = concatenate_videoclips(clips, method="compose")
         video_path = os.path.join(output_dir, "old_money_reel_10s.mp4")
-        
-        print(f"--- [VIDÉO] Encodage en cours → {video_path} ---")
-        final_video.write_videofile(
+
+        video.write_videofile(
             video_path,
             fps=30,
             codec="libx264",
             audio=False,
             preset="medium",
             threads=4,
-            logger=None,  # Moins de logs verbeux dans la CI
-            ffmpeg_params=["-crf", "23"]  # Bonne qualité / taille raisonnable
+            logger=None,
+            ffmpeg_params=["-crf", "23", "-pix_fmt", "yuv420p"]
         )
-        
-        total_duration = len(image_paths) * DURATION_PER_IMAGE
-        print(f"\n=== SUCCÈS TOTAL ===")
-        print(f"→ {success_count} images générées")
-        print(f"→ Vidéo créée : {video_path}")
-        print(f"→ Durée : {total_duration} secondes")
-        print(f"→ Dossier : {output_dir}")
+
+        print(f"\n=== SUCCÈS ===")
+        print(f"✓ {len(image_paths)} images + vidéo créée : {video_path}")
         print(f"====================\n")
-        
+
     except Exception as e:
-        print(f"--- [ERREUR] Échec création vidéo : {e} ---")
+        print(f"--- [ERREUR VIDÉO] : {e} ---")
         import traceback
         traceback.print_exc()
 
