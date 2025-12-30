@@ -5,12 +5,11 @@ import moviepy.video.fx as fx
 
 # ==================== CONFIGURATION ====================
 SOURCE_DIR = "generated_images/session_20251230_000707"
-OUTPUT_FILENAME = "recap_video_random_subtile.mp4"
+OUTPUT_FILENAME = "recap_video_variations.mp4"
 DISPLAY_DURATION = 2.0     
 TRANSITION_DURATION = 0.5  
 FPS = 60
 
-# Liste des phrases à piocher aléatoirement
 PHRASES = [
     "remigration", "send them back", "life after remigration", 
     "this and remigration", "remigration vibes", "remigration is beautiful", 
@@ -18,11 +17,21 @@ PHRASES = [
     "mass deportation", "this vibe and remigration"
 ]
 
+# Liste des positions possibles (sécurisées pour rester dans le cadre)
+POSITIONS = [
+    ('left', 'top'),      # En haut à gauche
+    ('right', 'top'),     # En haut à droite
+    ('left', 'bottom'),   # En bas à gauche
+    ('right', 'bottom'),  # En bas à droite
+    ('center', 'bottom'), # En bas au milieu
+    ('center', 'top')     # En haut au milieu
+]
+
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # ======================================================
 
-def create_random_text_video(folder_path, output_name):
-    print(f"--- [LOG] Rendu vidéo avec textes aléatoires ---")
+def create_dynamic_text_video(folder_path, output_name):
+    print(f"--- [LOG] Rendu vidéo avec variations de texte et positions ---")
     
     if not os.path.exists(folder_path):
         print(f"--- [ERREUR] Dossier introuvable ---")
@@ -42,40 +51,41 @@ def create_random_text_video(folder_path, output_name):
         total_clip_duration = DISPLAY_DURATION + TRANSITION_DURATION
 
         for i, path in enumerate(image_files):
-            # 1. Sélection aléatoire de la phrase pour cette image précise
+            # 1. Sélection aléatoire de la phrase ET de la position
             current_text = random.choice(PHRASES)
-            print(f"   > Image {i+1}: Texte choisi -> '{current_text}'")
+            current_pos = random.choice(POSITIONS)
+            print(f"   > Image {i+1}: '{current_text}' placé à {current_pos}")
 
             # 2. Image de fond
             img_clip = ImageClip(path).with_duration(total_clip_duration)
             
-            # 3. Texte subtil
+            # 3. Texte subtil mais lisible
             txt_clip = TextClip(
                 text=current_text,
-                font_size=22,             # Très petit
+                font_size=28,             # Taille légèrement augmentée pour lisibilité
                 color='white',
                 font=FONT_PATH,
                 stroke_color='black',
-                stroke_width=0.5
+                stroke_width=1            # Contour un peu plus marqué pour être lisible partout
             ).with_duration(total_clip_duration)
             
-            # Opacité réduite (très discret)
-            txt_clip = txt_clip.with_opacity(0.35)
+            # Opacité subtile
+            txt_clip = txt_clip.with_opacity(0.45)
             
-            # Positionnement aléatoire dans les coins (optionnel) ou fixe en bas
-            # Ici, on le garde fixe en bas à droite pour la cohérence
-            txt_clip = txt_clip.with_position((0.75, 0.92), relative=True)
+            # 4. Application de la position avec une MARGE (pour ne pas toucher les bords)
+            # margin=30 assure que le texte ne colle pas au cadre
+            txt_clip = txt_clip.with_margin(30).with_position(current_pos)
 
-            # 4. Superposition
+            # 5. Superposition
             composite = CompositeVideoClip([img_clip, txt_clip])
             
-            # 5. Transition
+            # 6. Transition
             if i > 0:
                 composite = composite.with_effects([fx.CrossFadeIn(TRANSITION_DURATION)])
             
             clips.append(composite)
 
-        # Assemblage
+        # Assemblage final
         video = concatenate_videoclips(clips, method="compose", padding=-TRANSITION_DURATION)
         
         video_path = os.path.join(folder_path, output_name)
@@ -88,10 +98,10 @@ def create_random_text_video(folder_path, output_name):
             ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
         )
 
-        print(f"--- [SUCCÈS] Vidéo générée avec messages variables ---")
+        print(f"\n=== SUCCÈS : VIDÉO DYNAMIQUE GÉNÉRÉE ===")
 
     except Exception as e:
         print(f"--- [ERREUR] : {e} ---")
 
 if __name__ == "__main__":
-    create_random_text_video(SOURCE_DIR, OUTPUT_FILENAME)
+    create_dynamic_text_video(SOURCE_DIR, OUTPUT_FILENAME)
