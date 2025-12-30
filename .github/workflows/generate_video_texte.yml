@@ -1,4 +1,4 @@
-name: Manual Video Compilation
+name: Manual Video Compilation Texte
 
 on:
   workflow_dispatch:
@@ -21,12 +21,12 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          # Ajout de imagemagick ici
-          sudo apt-get install -y ffmpeg libsm6 libxext6 imagemagick
+          # Installation de ffmpeg, imagemagick et des polices DejaVu
+          sudo apt-get install -y ffmpeg libsm6 libxext6 imagemagick fonts-dejavu-core
 
       - name: Configure ImageMagick Policy
-        # Cette étape est CRUCIALE pour éviter l'erreur "Policy Error" sur GitHub Actions
         run: |
+          # Déverrouillage des droits ImageMagick pour permettre la création de labels texte
           sudo sed -i 's/domain="coder" rights="none" pattern="PDF"/domain="coder" rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
           sudo sed -i 's/domain="coder" rights="none" pattern="LABEL"/domain="coder" rights="read|write" pattern="LABEL"/' /etc/ImageMagick-6/policy.xml
 
@@ -43,7 +43,6 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_key.json" >> $GITHUB_ENV
 
       - name: Run Video Generation Script
-        # J'ai mis à jour le nom vers generate_video_texte.py selon ta demande
         run: python generate_video_texte.py
 
       - name: Commit & Push Video
@@ -51,15 +50,14 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # On ajoute tout le contenu du dossier, y compris la nouvelle vidéo avec texte
           git add generated_images/session_20251230_000707/*
           
           if git diff --cached --quiet; then
-            echo "Aucune nouvelle vidéo à commiter."
+            echo "Aucun changement."
           else
-            git commit -m "chore: génération vidéo avec texte session 20251230_000707"
+            git commit -m "feat: vidéo avec texte REMIGRATION"
             git push
-            echo "✅ Vidéo ajoutée au dépôt !"
+            echo "✅ Vidéo poussée sur le dépôt"
           fi
 
       - name: Cleanup
