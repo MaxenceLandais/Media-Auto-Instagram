@@ -1,0 +1,61 @@
+name: Manual Video Compilation
+
+on:
+  workflow_dispatch: # Permet de lancer le script manuellement depuis l'onglet Actions
+
+jobs:
+  build-video:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Autorise l'action à pousser la vidéo sur le dépôt
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsm6 libxext6
+
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install moviepy google-cloud-aiplatform
+          # Note: MoviePy v2 installe automatiquement ses dépendances imageio-ffmpeg
+
+      - name: Google Cloud Authentication
+        env:
+          GCS_SERVICE_ACCOUNT_KEY: ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
+        run: |
+          echo "$GCS_SERVICE_ACCOUNT_KEY" > gcp_key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_key.json" >> $GITHUB_ENV
+
+      - name: Run Video Generation Script
+        run: python NOM_DE_VOTRE_SCRIPT.py 
+        # Remplacez NOM_DE_VOTRE_SCRIPT.py par le nom du fichier créé précédemment
+
+      - name: Commit & Push Video
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # On ajoute tout le contenu du dossier de session
+          git add generated_images/session_20251230_000707/*
+          
+          if git diff --cached --quiet; then
+            echo "Aucune nouvelle vidéo à commiter."
+          else
+            git commit -m "chore: génération vidéo session 20251230_000707"
+            git push
+            echo "✅ Vidéo ajoutée au dépôt !"
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: rm -f gcp_key.json
