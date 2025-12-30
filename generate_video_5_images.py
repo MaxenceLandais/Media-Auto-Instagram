@@ -19,7 +19,7 @@ DURATION_PER_IMAGE = 2.0  # 10 secondes total
 def get_creative_scenes(project_id, location, num_scenes=NUM_SCENES):
     print("--- [LOG] Initialisation Gemini ---")
     vertexai.init(project=project_id, location=location)
-    model = GenerativeModel("gemini-1.5-flash")
+    model = GenerativeModel("gemini-2.5-flash")
 
     prompt_instruction = (
         f"Generate {num_scenes} ultra-detailed image prompts for a luxury 'Old Money' aesthetic Instagram reel. "
