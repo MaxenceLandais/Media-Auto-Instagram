@@ -18,22 +18,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install minimal system dependencies (ffmpeg + basic X11 libs)
+      - name: Install minimal system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            ffmpeg \
-            libsm6 \
-            libxext6 \
-            libfontconfig1 \
-            libxrender1 \
-            libglib2.0-0
+          sudo apt-get install -y ffmpeg libsm6 libxext6 libfontconfig1 libxrender1 libglib2.0-0
 
       - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install google-cloud-aiplatform>=1.70.0
-          pip install moviepy imageio-ffmpeg
+          pip install moviepy  # Installe tout automatiquement (imageio-ffmpeg inclus)
 
       - name: Google Cloud Authentication
         env:
@@ -42,26 +36,23 @@ jobs:
           echo "$GCS_SERVICE_ACCOUNT_KEY" > gcp_key.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_key.json" >> $GITHUB_ENV
 
-      - name: Run generation script (5 images + 10s reel)
+      - name: Run generation script
         run: python generate_video_5_images.py
 
-      - name: Commit & Push generated assets
+      - name: Commit & Push assets
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
           mkdir -p generated_images
-          
           git add generated_images/*
-          
           if git diff --cached --quiet; then
-            echo "Aucun nouveau fichier généré."
+            echo "Aucun changement."
           else
             git commit -m "feat: nouveau pack Old Money – 5 images + reel 10s ($(date +'%Y-%m-%d %H:%M'))"
             git push
-            echo "✅ Images et vidéo poussées sur le repo !"
+            echo "✅ Tout poussé !"
           fi
 
-      - name: Cleanup credentials
+      - name: Cleanup
         if: always()
         run: rm -f gcp_key.json
