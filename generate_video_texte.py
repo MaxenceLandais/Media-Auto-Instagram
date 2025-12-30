@@ -17,20 +17,25 @@ PHRASES = [
     "mass deportation", "this vibe and remigration"
 ]
 
+# Positions personnalisées (pourcentages de l'écran)
+# Format : (x, y) où 0.5 est le centre. 
+# On reste entre 0.2 et 0.8 pour être "subtilement décalé du centre"
 POSITIONS = [
-    ('left', 'top'), ('right', 'top'), 
-    ('left', 'bottom'), ('right', 'bottom'),
-    ('center', 'bottom'), ('center', 'top')
+    (0.2, 0.2), # En haut à gauche, mais vers le centre
+    (0.6, 0.2), # En haut à droite, mais vers le centre
+    (0.2, 0.7), # En bas à gauche, vers le centre
+    (0.6, 0.7), # En bas à droite, vers le centre
+    (0.4, 0.5), # Presque au milieu
+    (0.4, 0.8)  # En bas au milieu
 ]
 
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # ======================================================
 
-def create_dynamic_video_fixed(folder_path, output_name):
-    print(f"--- [LOG] Rendu vidéo avec correction explicite des marges ---")
+def create_clean_video(folder_path, output_name):
+    print(f"--- [LOG] Rendu vidéo (sans carrés noirs) ---")
     
     if not os.path.exists(folder_path):
-        print(f"--- [ERREUR] Dossier introuvable ---")
         return
 
     image_files = [
@@ -49,23 +54,19 @@ def create_dynamic_video_fixed(folder_path, output_name):
             # 1. Clip Image
             img_clip = ImageClip(path).with_duration(total_clip_duration)
             
-            # 2. Clip Texte
+            # 2. Clip Texte (sans effet de marge pour éviter les carrés noirs)
             txt_clip = TextClip(
                 text=current_text,
-                font_size=28,
+                font_size=26,
                 color='white',
                 font=FONT_PATH,
                 stroke_color='black',
-                stroke_width=1
-            ).with_duration(total_clip_duration).with_opacity(0.45)
+                stroke_width=0.8
+            ).with_duration(total_clip_duration).with_opacity(0.4)
             
-            # Correction Marges : Spécification de chaque côté pour éviter le TypeError
-            txt_clip = txt_clip.with_effects([
-                fx.Margin(top=40, bottom=40, left=40, right=40)
-            ])
-            
-            # Application de la position
-            txt_clip = txt_clip.with_position(current_pos)
+            # Positionnement par coordonnées relatives (x%, y%)
+            # Cela place le texte sans ajouter de bordures externes
+            txt_clip = txt_clip.with_position(current_pos, relative=True)
 
             # 3. Superposition
             composite = CompositeVideoClip([img_clip, txt_clip])
@@ -89,12 +90,10 @@ def create_dynamic_video_fixed(folder_path, output_name):
             ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
         )
 
-        print(f"--- [SUCCÈS] Vidéo générée avec marges explicites ---")
+        print(f"--- [SUCCÈS] Vidéo propre générée ---")
 
     except Exception as e:
         print(f"--- [ERREUR] : {e} ---")
-        import traceback
-        traceback.print_exc()
 
 if __name__ == "__main__":
-    create_dynamic_video_fixed(SOURCE_DIR, OUTPUT_FILENAME)
+    create_clean_video(SOURCE_DIR, OUTPUT_FILENAME)
