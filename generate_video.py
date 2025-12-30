@@ -3,20 +3,19 @@ from moviepy import ImageClip, concatenate_videoclips
 
 # ==================== CONFIGURATION ====================
 SOURCE_DIR = "generated_images/session_20251230_000707"
-OUTPUT_FILENAME = "recap_video_session.mp4"
-DURATION_PER_IMAGE = 2.0  # Durée en secondes
-FPS = 30
+OUTPUT_FILENAME = "recap_video_60fps.mp4"
+DURATION_PER_IMAGE = 2.0  # Chaque image reste 2 secondes
+FPS = 60                  # Fluidité maximale pour les réseaux sociaux
 # ======================================================
 
-def create_video_from_folder(folder_path, output_name):
-    print(f"--- [LOG] Lecture du dossier : {folder_path} ---")
+def create_video_60fps(folder_path, output_name):
+    print(f"--- [LOG] Début du rendu à {FPS} FPS ---")
     
-    # Vérification si le dossier existe
     if not os.path.exists(folder_path):
-        print(f"--- [ERREUR] Le dossier {folder_path} n'existe pas. ---")
+        print(f"--- [ERREUR] Dossier introuvable : {folder_path} ---")
         return
 
-    # Lister et filtrer les images (png, jpg, jpeg)
+    # Sélection des images
     valid_extensions = ('.png', '.jpg', '.jpeg')
     image_files = [
         os.path.join(folder_path, f) for f in sorted(os.listdir(folder_path))
@@ -24,47 +23,47 @@ def create_video_from_folder(folder_path, output_name):
     ]
 
     if not image_files:
-        print("--- [ERREUR] Aucune image trouvée dans le dossier. ---")
+        print("--- [ERREUR] Aucune image trouvée. ---")
         return
-
-    print(f"--- [LOG] {len(image_files)} images trouvées. Création des clips... ---")
 
     try:
         clips = []
         for path in image_files:
-            # Création du clip pour chaque image
+            # Création du clip
             clip = ImageClip(path).with_duration(DURATION_PER_IMAGE)
             
-            # Optionnel : Ajout d'un zoom progressif (Ken Burns effect)
-            # clip = clip.with_effects([lambda c: c.resize(lambda t: 1 + 0.04 * t)])
+            # Effet de zoom progressif (Ken Burns)
+            # 1.04 signifie un zoom de 4% sur la durée du clip
+            # À 60 FPS, ce mouvement sera parfaitement lisse
+            clip = clip.with_effects([lambda c: c.resize(lambda t: 1 + 0.04 * (t / DURATION_PER_IMAGE))])
             
             clips.append(clip)
 
-        # Assemblage des clips
-        print("--- [LOG] Assemblage de la vidéo finale... ---")
+        # Assemblage
+        print(f"--- [LOG] Assemblage de {len(clips)} clips ---")
         video = concatenate_videoclips(clips, method="compose")
         
-        # Chemin de sortie final
         video_path = os.path.join(folder_path, output_name)
 
-        # Exportation
+        # Exportation haute fluidité
         video.write_videofile(
             video_path,
             fps=FPS,
             codec="libx264",
             audio=False,
-            preset="medium",
+            preset="slow",      # 'slow' permet une meilleure compression à 60 FPS
             threads=4,
-            logger="bar", # Affiche une barre de progression
-            ffmpeg_params=["-crf", "23", "-pix_fmt", "yuv420p"]
+            logger="bar",
+            ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"] 
+            # -crf 18 offre une qualité visuellement sans perte
         )
 
-        print(f"\n=== SUCCÈS ===")
-        print(f"✓ Vidéo générée avec succès : {video_path}")
-        print(f"====================\n")
+        print(f"\n=== SUCCÈS 60 FPS ===")
+        print(f"✓ Vidéo : {video_path}")
+        print(f"======================\n")
 
     except Exception as e:
-        print(f"--- [ERREUR] Lors de la création vidéo : {e} ---")
+        print(f"--- [ERREUR] : {e} ---")
 
 if __name__ == "__main__":
-    create_video_from_folder(SOURCE_DIR, OUTPUT_FILENAME)
+    create_video_60fps(SOURCE_DIR, OUTPUT_FILENAME)
