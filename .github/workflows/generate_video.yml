@@ -1,13 +1,13 @@
 name: Manual Video Compilation
 
 on:
-  workflow_dispatch: # Permet de lancer le script manuellement depuis l'onglet Actions
+  workflow_dispatch:
 
 jobs:
   build-video:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Autorise l'action à pousser la vidéo sur le dépôt
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -27,7 +27,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install moviepy google-cloud-aiplatform
-          # Note: MoviePy v2 installe automatiquement ses dépendances imageio-ffmpeg
 
       - name: Google Cloud Authentication
         env:
@@ -37,15 +36,14 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/gcp_key.json" >> $GITHUB_ENV
 
       - name: Run Video Generation Script
-        run: python NOM_DE_VOTRE_SCRIPT.py 
-        # Remplacez NOM_DE_VOTRE_SCRIPT.py par le nom du fichier créé précédemment
+        run: python generate_video.py  # <--- Correction ici
 
       - name: Commit & Push Video
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # On ajoute tout le contenu du dossier de session
+          # On ajoute spécifiquement le dossier de session et la vidéo générée
           git add generated_images/session_20251230_000707/*
           
           if git diff --cached --quiet; then
