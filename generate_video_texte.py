@@ -17,23 +17,18 @@ PHRASES = [
     "mass deportation", "this vibe and remigration"
 ]
 
-# Positions personnalisées (pourcentages de l'écran)
-# Format : (x, y) où 0.5 est le centre. 
-# On reste entre 0.2 et 0.8 pour être "subtilement décalé du centre"
+# Positions resserrées vers le centre (0.3 à 0.7) pour éviter les bords
 POSITIONS = [
-    (0.2, 0.2), # En haut à gauche, mais vers le centre
-    (0.6, 0.2), # En haut à droite, mais vers le centre
-    (0.2, 0.7), # En bas à gauche, vers le centre
-    (0.6, 0.7), # En bas à droite, vers le centre
-    (0.4, 0.5), # Presque au milieu
-    (0.4, 0.8)  # En bas au milieu
+    (0.3, 0.3), (0.5, 0.3), (0.7, 0.3),
+    (0.3, 0.5), (0.7, 0.5),
+    (0.3, 0.7), (0.5, 0.7), (0.7, 0.7)
 ]
 
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # ======================================================
 
-def create_clean_video(folder_path, output_name):
-    print(f"--- [LOG] Rendu vidéo (sans carrés noirs) ---")
+def create_readable_video(folder_path, output_name):
+    print(f"--- [LOG] Rendu vidéo : Opacité augmentée & texte recentré ---")
     
     if not os.path.exists(folder_path):
         return
@@ -54,18 +49,20 @@ def create_clean_video(folder_path, output_name):
             # 1. Clip Image
             img_clip = ImageClip(path).with_duration(total_clip_duration)
             
-            # 2. Clip Texte (sans effet de marge pour éviter les carrés noirs)
+            # 2. Clip Texte
             txt_clip = TextClip(
                 text=current_text,
-                font_size=26,
+                font_size=30,             # Taille légèrement augmentée
                 color='white',
                 font=FONT_PATH,
                 stroke_color='black',
-                stroke_width=0.8
-            ).with_duration(total_clip_duration).with_opacity(0.4)
+                stroke_width=1.2          # Contour plus net pour la lisibilité
+            ).with_duration(total_clip_duration)
             
-            # Positionnement par coordonnées relatives (x%, y%)
-            # Cela place le texte sans ajouter de bordures externes
+            # Opacité à 0.65 : équilibre parfait entre lisibilité et transparence
+            txt_clip = txt_clip.with_opacity(0.65)
+            
+            # Positionnement relatif
             txt_clip = txt_clip.with_position(current_pos, relative=True)
 
             # 3. Superposition
@@ -77,7 +74,7 @@ def create_clean_video(folder_path, output_name):
             
             clips.append(composite)
 
-        # Assemblage
+        # Assemblage final
         video = concatenate_videoclips(clips, method="compose", padding=-TRANSITION_DURATION)
         
         video_path = os.path.join(folder_path, output_name)
@@ -90,10 +87,10 @@ def create_clean_video(folder_path, output_name):
             ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
         )
 
-        print(f"--- [SUCCÈS] Vidéo propre générée ---")
+        print(f"--- [SUCCÈS] Vidéo générée avec opacité 0.65 ---")
 
     except Exception as e:
         print(f"--- [ERREUR] : {e} ---")
 
 if __name__ == "__main__":
-    create_clean_video(SOURCE_DIR, OUTPUT_FILENAME)
+    create_readable_video(SOURCE_DIR, OUTPUT_FILENAME)
