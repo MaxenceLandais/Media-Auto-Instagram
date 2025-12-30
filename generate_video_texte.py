@@ -17,18 +17,20 @@ PHRASES = [
     "mass deportation", "this vibe and remigration"
 ]
 
-# Positions resserrées vers le centre (0.3 à 0.7) pour éviter les bords
-POSITIONS = [
-    (0.3, 0.3), (0.5, 0.3), (0.7, 0.3),
-    (0.3, 0.5), (0.7, 0.5),
-    (0.3, 0.7), (0.5, 0.7), (0.7, 0.7)
+# ZONES DE SÉCURITÉ (On évite le centre 0.5, 0.5 où sont les visages/corps)
+# On privilégie les coins internes et les zones hautes/basses décentrées
+POSITIONS_SECURISEES = [
+    (0.15, 0.15), (0.70, 0.15), # Coins supérieurs (souvent ciel/décor)
+    (0.15, 0.80), (0.70, 0.80), # Coins inférieurs (souvent sol/bas du corps)
+    (0.15, 0.40), (0.75, 0.40), # Côtés médians
+    (0.40, 0.10), (0.40, 0.85)  # Plein haut ou plein bas (très efficace)
 ]
 
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # ======================================================
 
-def create_readable_video(folder_path, output_name):
-    print(f"--- [LOG] Rendu vidéo : Opacité augmentée & texte recentré ---")
+def create_safe_video(folder_path, output_name):
+    print(f"--- [LOG] Rendu vidéo : Zones de sécurité anti-visages ---")
     
     if not os.path.exists(folder_path):
         return
@@ -44,7 +46,8 @@ def create_readable_video(folder_path, output_name):
 
         for i, path in enumerate(image_files):
             current_text = random.choice(PHRASES)
-            current_pos = random.choice(POSITIONS)
+            # Sélection d'une position qui évite le centre
+            current_pos = random.choice(POSITIONS_SECURISEES)
             
             # 1. Clip Image
             img_clip = ImageClip(path).with_duration(total_clip_duration)
@@ -52,17 +55,14 @@ def create_readable_video(folder_path, output_name):
             # 2. Clip Texte
             txt_clip = TextClip(
                 text=current_text,
-                font_size=30,             # Taille légèrement augmentée
+                font_size=28,
                 color='white',
                 font=FONT_PATH,
                 stroke_color='black',
-                stroke_width=1.2          # Contour plus net pour la lisibilité
-            ).with_duration(total_clip_duration)
+                stroke_width=1.2
+            ).with_duration(total_clip_duration).with_opacity(0.65)
             
-            # Opacité à 0.65 : équilibre parfait entre lisibilité et transparence
-            txt_clip = txt_clip.with_opacity(0.65)
-            
-            # Positionnement relatif
+            # Positionnement relatif dans les zones de respiration
             txt_clip = txt_clip.with_position(current_pos, relative=True)
 
             # 3. Superposition
@@ -87,10 +87,10 @@ def create_readable_video(folder_path, output_name):
             ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
         )
 
-        print(f"--- [SUCCÈS] Vidéo générée avec opacité 0.65 ---")
+        print(f"--- [SUCCÈS] Vidéo générée avec placement stratégique ---")
 
     except Exception as e:
         print(f"--- [ERREUR] : {e} ---")
 
 if __name__ == "__main__":
-    create_readable_video(SOURCE_DIR, OUTPUT_FILENAME)
+    create_safe_video(SOURCE_DIR, OUTPUT_FILENAME)
