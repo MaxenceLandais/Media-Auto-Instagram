@@ -17,7 +17,6 @@ PHRASES = [
     "mass deportation", "this vibe and remigration"
 ]
 
-# Positions sécurisées
 POSITIONS = [
     ('left', 'top'), ('right', 'top'), 
     ('left', 'bottom'), ('right', 'bottom'),
@@ -28,7 +27,7 @@ FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # ======================================================
 
 def create_dynamic_video_fixed(folder_path, output_name):
-    print(f"--- [LOG] Rendu vidéo avec corrections marges ---")
+    print(f"--- [LOG] Rendu vidéo avec correction explicite des marges ---")
     
     if not os.path.exists(folder_path):
         print(f"--- [ERREUR] Dossier introuvable ---")
@@ -60,9 +59,12 @@ def create_dynamic_video_fixed(folder_path, output_name):
                 stroke_width=1
             ).with_duration(total_clip_duration).with_opacity(0.45)
             
-            # Correction de la marge : On applique l'effet de marge AVANT la position
-            # On ajoute 30 pixels de marge sur tous les côtés
-            txt_clip = txt_clip.with_effects([fx.Margin(all=30)])
+            # Correction Marges : Spécification de chaque côté pour éviter le TypeError
+            txt_clip = txt_clip.with_effects([
+                fx.Margin(top=40, bottom=40, left=40, right=40)
+            ])
+            
+            # Application de la position
             txt_clip = txt_clip.with_position(current_pos)
 
             # 3. Superposition
@@ -87,7 +89,7 @@ def create_dynamic_video_fixed(folder_path, output_name):
             ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
         )
 
-        print(f"--- [SUCCÈS] Vidéo générée avec marges de sécurité ---")
+        print(f"--- [SUCCÈS] Vidéo générée avec marges explicites ---")
 
     except Exception as e:
         print(f"--- [ERREUR] : {e} ---")
